@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Wally — sample statement PDFs. Full account PII; provided locally only, NEVER commit.
+tests/fixtures/cibc-sample-statement.pdf
+tests/fixtures/rbc-sample-statement.pdf
