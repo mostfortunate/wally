@@ -1,0 +1,19 @@
+# Wally budget config — copy this to `wally.toml` and fill in your own numbers.
+#
+#   cp wally.example.toml wally.toml
+#
+# `wally.toml` is gitignored so your personal budget figures stay off the remote.
+#
+# Categories: the names you choose on the left ARE your budget vocabulary. The
+# classifier maps each transaction into one of these categories, or leaves it
+# UNCATEGORIZED (which is reported, never dropped).
+#
+# Amounts are quoted strings ON PURPOSE. Money is Decimal, never float — a bare
+# TOML number (100.00) parses as a float and can lose a penny, which would trip a
+# reconciliation gate. Always quote: "100.00", not 100.00.
+
+[budget.limits]
+# <category> = "<monthly limit>"
+takeout   = "100.00"
+groceries = "600.00"
+gas       = "300.00"
