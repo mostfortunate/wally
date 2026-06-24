@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Wally — personal budget config (copy from wally.example.toml). Keep real numbers
+# off the remote; commit the example template instead.
+wally.toml
