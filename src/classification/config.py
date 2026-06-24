@@ -7,9 +7,15 @@ the hot path in `classify` only normalizes each transaction description.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+# After lowercasing, keep ONLY ascii letters, digits, '#' and '$'; drop everything else
+# (whitespace, punctuation, stray glyphs). ascii-only is deliberate: a glyph like "Ý"
+# lowercases to "ý", which is alphanumeric to Python but is exactly the noise we drop.
+_STRIP = re.compile(r"[^a-z0-9#$]")
 
 
 class ClassificationError(Exception):
@@ -17,8 +23,14 @@ class ClassificationError(Exception):
 
 
 def normalize(text: str) -> str:
-    """Lowercase and strip ALL whitespace, so spacing/case never affect a match."""
-    return "".join(text.split()).lower()
+    """Lowercase, then keep only letters, digits, '#' and '$'.
+
+    Drops whitespace, punctuation, and stray glyphs so real statement descriptions like
+    "AMAZON* BY8UE6Y60", "Ý TIM HORTONS #2813", or "UBER CANADA/UBERTRIP" reduce to
+    "amazonby8ue6y60", "timhortons#2813", "ubercanadaubertrip" and substring patterns
+    match cleanly. '#' and '$' are kept because they're meaningful (e.g. a store "#2813").
+    """
+    return _STRIP.sub("", text.lower())
 
 
 @dataclass(frozen=True)

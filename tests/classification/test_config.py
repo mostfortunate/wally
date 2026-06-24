@@ -16,6 +16,14 @@ def test_normalize_lowercases_and_strips_all_whitespace() -> None:
     assert normalize("  Uber\tEats\n") == "ubereats"
 
 
+def test_normalize_keeps_only_letters_digits_hash_and_dollar() -> None:
+    # Punctuation and stray glyphs are dropped; '#' and '$' survive.
+    assert normalize("AMAZON* BY8UE6Y60") == "amazonby8ue6y60"
+    assert normalize("Ý TIM HORTONS #2813") == "timhortons#2813"
+    assert normalize("UBER CANADA/UBERTRIP") == "ubercanadaubertrip"
+    assert normalize("$5.00 FEE") == "$500fee"
+
+
 def test_parse_rules_normalizes_patterns() -> None:
     data = {
         "categories": {"takeout": ["Tim Hortons", "UBER EATS"]},

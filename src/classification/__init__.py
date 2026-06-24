@@ -7,8 +7,8 @@ Every transaction is parsed first, then classified into exactly one disposition:
   - UNCATEGORIZED — real spend we couldn't attribute. Never silently dropped; surfaces
                     in the report as a warning.
 
-Matching is deterministic: normalize the description (lowercase, strip whitespace) and
-test each normalized pattern as a substring. Decisions, in order:
+Matching is deterministic: normalize the description (lowercase; keep only letters,
+digits, '#', '$') and test each normalized pattern as a substring. Decisions, in order:
   1. Exclusions are checked FIRST — a card payment must never be miscategorized.
   2. A description matching two or more distinct categories (or exclusion reasons) is a
      config error, not first-match-wins. Silent miscategorization is unacceptable in a

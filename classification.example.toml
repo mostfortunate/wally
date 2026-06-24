@@ -4,10 +4,11 @@
 #
 # `classification.toml` is gitignored so your merchant list stays off the remote.
 #
-# How matching works: each transaction's description is lowercased with all whitespace
-# stripped, and so is every pattern below; a pattern matches if it's a substring of the
-# description. Exclusions are checked first. If a description matches two different
-# categories (or two exclusion reasons), that's a config error — disambiguate it.
+# How matching works: each transaction's description is lowercased and reduced to only
+# letters, digits, '#' and '$' (whitespace, punctuation, and stray glyphs are dropped),
+# and so is every pattern below; a pattern matches if it's a substring of the description.
+# Exclusions are checked first. If a description matches two different categories (or two
+# exclusion reasons), that's a config error — disambiguate it.
 
 [categories]
 # <category> = ["substring", "substring", ...]

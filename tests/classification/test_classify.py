@@ -32,6 +32,13 @@ def test_single_category_match() -> None:
     assert result.category == "takeout"
 
 
+def test_match_survives_punctuation_and_stray_glyphs() -> None:
+    # Real CIBC noise: a leading glyph and inner punctuation must not block the match.
+    [result] = classify([_txn("Ý  TIM-HORTONS* #2813 / VANCOUVER")], RULES)
+    assert result.disposition is Disposition.CATEGORIZED
+    assert result.category == "takeout"
+
+
 def test_exclusion_is_checked_first() -> None:
     # Matches the exclusion; must be EXCLUDED with a reason, never categorized.
     [result] = classify([_txn("PAYMENT THANK YOU / PAIEMENT MERCI")], RULES)
