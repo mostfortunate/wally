@@ -217,6 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Wally — personal classification rules (copy from classification.example.toml). Keep
+# your merchant list off the remote; commit the example template instead.
+classification.toml
+
 # Wally — sample statement PDFs. Full account PII; provided locally only, NEVER commit.
 tests/fixtures/cibc-sample-statement.pdf
 tests/fixtures/rbc-sample-statement.pdf
