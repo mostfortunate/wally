@@ -56,11 +56,15 @@ class TestClusterRows:
 class TestParseTransactionRow:
     def _amazon_row(self) -> list[dict]:
         return [
-            _w("Apr", 36.7, 196), _w("26", 51.1, 196),
-            _w("Apr", 78.7, 196), _w("27", 93.1, 196),
-            _w("AMAZON*", 122.8, 196, 159), _w("VANCOUVER", 219.3, 196, 263),
+            _w("Apr", 36.7, 196),
+            _w("26", 51.1, 196),
+            _w("Apr", 78.7, 196),
+            _w("27", 93.1, 196),
+            _w("AMAZON*", 122.8, 196, 159),
+            _w("VANCOUVER", 219.3, 196, 263),
             _w("BC", 272.1, 196, 281),
-            _w("Personal", 341.5, 196, 369), _w("Expenses", 424.0, 196, 453),
+            _w("Personal", 341.5, 196, 369),
+            _w("Expenses", 424.0, 196, 453),
             _w("30.52", 520.0, 196, 539),
         ]
 
@@ -85,8 +89,10 @@ class TestParseTransactionRow:
     def test_amount_outside_amount_column_is_not_a_transaction(self) -> None:
         # A money-looking token sitting in the description column must not count.
         row = [
-            _w("May", 36.7, 50), _w("15", 51.1, 50),
-            _w("CASHBACK", 122.8, 50, 180), _w("70.00", 200.0, 50, 220),
+            _w("May", 36.7, 50),
+            _w("15", 51.1, 50),
+            _w("CASHBACK", 122.8, 50, 180),
+            _w("70.00", 200.0, 50, 220),
         ]
         assert parse_transaction_row(row, COLUMNS, year=2026) is None
 
@@ -94,10 +100,13 @@ class TestParseTransactionRow:
 class TestSectionColumns:
     def _header(self) -> list[dict]:
         return [
-            _w("Trans", 36, 150), _w("date", 55, 150),
-            _w("Post", 78, 150), _w("date", 95, 150),
+            _w("Trans", 36, 150),
+            _w("date", 55, 150),
+            _w("Post", 78, 150),
+            _w("date", 95, 150),
             _w("Description", 118, 150),
-            _w("Spend", 330, 150), _w("Categories", 365, 150),
+            _w("Spend", 330, 150),
+            _w("Categories", 365, 150),
             _w("Amount($)", 505, 150),
         ]
 
