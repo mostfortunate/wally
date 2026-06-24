@@ -6,18 +6,26 @@ rest of the pipeline is bank-agnostic.
 
 from __future__ import annotations
 
+import pdfplumber
+
 from src.parsers.base import Parser, Statement
 from src.parsers.cibc import CibcParser
 from src.parsers.rbc import RbcParser
 
+# Fingerprints are anchored on section headers that appear on page 0 of each bank's PDF.
+_CIBC_FINGERPRINT = "YOUR NEW CHARGES AND CREDITS"
+_RBC_FINGERPRINT = "Withdrawals($)"
+
 
 def detect_parser(pdf_path: str) -> Parser:
-    """Inspect the PDF and return the matching bank parser.
-
-    Phase 0 stub: real detection keys off a bank fingerprint in the document text
-    (e.g. RBC's column header row vs. CIBC's "YOUR NEW CHARGES AND CREDITS" section).
-    """
-    raise NotImplementedError("bank detection — Phase 1")
+    """Inspect page 0 text and return the matching bank parser."""
+    with pdfplumber.open(pdf_path) as pdf:
+        text = pdf.pages[0].extract_text() or ""
+    if _CIBC_FINGERPRINT in text:
+        return CibcParser()
+    if _RBC_FINGERPRINT in text:
+        return RbcParser()
+    raise ValueError(f"Could not detect bank from {pdf_path!r}. Expected a CIBC or RBC statement.")
 
 
 def ingest(pdf_path: str) -> Statement:
