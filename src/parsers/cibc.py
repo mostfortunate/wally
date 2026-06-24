@@ -40,13 +40,14 @@ _MONTHS = {
 _CATEGORY_LEFT_FALLBACK = 325.0
 _AMOUNT_LEFT_FALLBACK = 500.0
 _ROW_TOL = 2.0  # rows whose `top` differ by <= this belong to the same line
-_DESC_LEFT = 110.0  # description words start right of the two date columns
+_DESC_LEFT_FALLBACK = 110.0  # description left edge if the header can't be located
 
 
 @dataclass(frozen=True)
 class _Columns:
-    """Left x-edges of the Spend-Categories and Amount columns for a page section."""
+    """Left x-edges of the Description, Spend-Categories, and Amount columns."""
 
+    description_left: float
     category_left: float
     amount_left: float
 
@@ -118,7 +119,7 @@ def parse_transaction_row(
     description = " ".join(
         w["text"]
         for w in row
-        if _DESC_LEFT <= w["x0"] < columns.category_left and w is not last
+        if columns.description_left <= w["x0"] < columns.category_left and w is not last
     )
     if not description:
         return None
@@ -133,15 +134,17 @@ def parse_transaction_row(
 
 
 def _section_columns(rows: list[list[dict]]) -> _Columns:
-    """Find the charges-section header to anchor the category and amount columns."""
+    """Find the charges-section header to anchor the Description, Category, Amount columns."""
     for row in rows:
         texts = {w["text"] for w in row}
         if "Amount($)" in texts and ("Spend" in texts or "Categories" in texts):
             amount_left = next(w["x0"] for w in row if w["text"] == "Amount($)")
             spend = [w for w in row if w["text"] in ("Spend", "Categories")]
             category_left = min(w["x0"] for w in spend)
-            return _Columns(category_left=category_left, amount_left=amount_left)
-    return _Columns(_CATEGORY_LEFT_FALLBACK, _AMOUNT_LEFT_FALLBACK)
+            desc = [w for w in row if w["text"] == "Description"]
+            description_left = desc[0]["x0"] if desc else _DESC_LEFT_FALLBACK
+            return _Columns(description_left, category_left, amount_left)
+    return _Columns(_DESC_LEFT_FALLBACK, _CATEGORY_LEFT_FALLBACK, _AMOUNT_LEFT_FALLBACK)
 
 
 def _statement_year(pdf: pdfplumber.PDF) -> int | None:

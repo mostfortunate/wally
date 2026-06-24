@@ -11,13 +11,14 @@ from src.parsers.base import Direction
 from src.parsers.cibc import (
     CibcParser,
     _Columns,
+    _section_columns,
     cluster_rows,
     parse_amount,
     parse_transaction_row,
 )
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "cibc-sample-statement.pdf"
-COLUMNS = _Columns(category_left=325.4, amount_left=504.5)
+COLUMNS = _Columns(description_left=110.0, category_left=325.4, amount_left=504.5)
 
 
 def _w(text: str, x0: float, top: float, x1: float | None = None) -> dict:
@@ -88,6 +89,27 @@ class TestParseTransactionRow:
             _w("CASHBACK", 122.8, 50, 180), _w("70.00", 200.0, 50, 220),
         ]
         assert parse_transaction_row(row, COLUMNS, year=2026) is None
+
+
+class TestSectionColumns:
+    def _header(self) -> list[dict]:
+        return [
+            _w("Trans", 36, 150), _w("date", 55, 150),
+            _w("Post", 78, 150), _w("date", 95, 150),
+            _w("Description", 118, 150),
+            _w("Spend", 330, 150), _w("Categories", 365, 150),
+            _w("Amount($)", 505, 150),
+        ]
+
+    def test_anchors_columns_on_the_header_tokens(self) -> None:
+        cols = _section_columns([self._header()])
+        assert cols.description_left == 118
+        assert cols.category_left == 330
+        assert cols.amount_left == 505
+
+    def test_falls_back_when_no_header_row(self) -> None:
+        cols = _section_columns([[_w("just", 10, 10), _w("words", 40, 10)]])
+        assert cols.description_left == 110.0  # _DESC_LEFT_FALLBACK
 
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason="PII fixture not present (never committed)")
