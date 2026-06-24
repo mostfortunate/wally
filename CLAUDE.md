@@ -401,6 +401,29 @@ How to verify (which fixtures, which gate).
 
 ---
 
+## Parallel work with subagents
+
+When work is split across **multiple subagents running in parallel** (e.g. one per module),
+**agree a shared contract before spawning any of them.** Skipping this step is how parallel
+agents invent overlapping types and signatures and produce branches that conflict on merge. The
+contract has three parts:
+
+1. **Frozen shared types & signatures.** Pin the data structures and function signatures each
+   agent must implement *before* launching — the Phase-0 data model in `src/parsers/base.py` is
+   the canonical example. Agents conform to these; they do not redesign them.
+2. **Disjoint file ownership.** Each agent touches only its own module + tests (+ its own config
+   file). No two agents edit the same file. In particular, **no parallel agent edits `cli.py` or
+   `src/parsers/base.py`** — those are shared seams.
+3. **Orchestrator-owned integration.** Cross-cutting wiring — connecting modules together in
+   `cli.py`, and merging branches — is done by the orchestrator *after* the agents finish, never
+   by the parallel agents themselves.
+
+Operational note: a git worktree starts from a clean checkout, so **untracked local files (e.g.
+sample statement PDFs) do not appear in an agent's worktree.** An agent that needs one must copy
+it in from the main checkout, and it stays gitignored (never committed).
+
+---
+
 ## Versioning
 
 Semantic Versioning (`MAJOR.MINOR.PATCH`). Currently `0.x.y` — public API not yet stable; minor
