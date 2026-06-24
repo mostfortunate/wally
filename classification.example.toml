@@ -19,4 +19,9 @@ gas       = ["petro", "shell", "esso"]
 
 [exclude]
 # <reason> = ["substring", ...]   — matched lines are EXCLUDED (money moved, not spend)
-"CIBC card payment" = ["payment thank you"]
+#
+# The CIBC card payment appears on TWO statements and must be excluded from both:
+#   - On the CIBC statement: "Payment Thank You / Paiement Merci" (a credit to the card)
+#   - On the RBC statement:  "Misc Payment CIBC CPD" (the debit that funds the payment)
+# Counting both would double your spend, so both patterns exclude under the same reason.
+"CIBC card payment" = ["payment thank you", "cibc cpd"]
