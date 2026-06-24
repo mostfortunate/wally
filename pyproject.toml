@@ -1,0 +1,43 @@
+[project]
+name = "wally"
+version = "0.1.0"
+description = "A budget reconciliation CLI that ingests bank-statement PDFs, classifies transactions, and reports spending against monthly budget limits."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pdfplumber>=0.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pyright>=1.1",
+]
+
+[project.scripts]
+wally = "src.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 99
+target-version = "py314"
+
+[tool.ruff.lint]
+# Sensible defaults plus a few that protect the invariants this project cares about.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
