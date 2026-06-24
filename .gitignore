@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Wally — personal classification rules (copy from classification.example.toml). Keep
+# your merchant list off the remote; commit the example template instead.
+classification.toml

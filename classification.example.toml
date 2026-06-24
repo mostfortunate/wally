@@ -1,0 +1,21 @@
+# Wally classification rules — copy this to `classification.toml` and fill in your own.
+#
+#   cp classification.example.toml classification.toml
+#
+# `classification.toml` is gitignored so your merchant list stays off the remote.
+#
+# How matching works: each transaction's description is lowercased with all whitespace
+# stripped, and so is every pattern below; a pattern matches if it's a substring of the
+# description. Exclusions are checked first. If a description matches two different
+# categories (or two exclusion reasons), that's a config error — disambiguate it.
+
+[categories]
+# <category> = ["substring", "substring", ...]
+# The category names must match the ones in your wally.toml budget limits.
+takeout   = ["tim hortons", "mcdonalds", "uber eats", "doordash"]
+groceries = ["save on foods", "costco", "no frills"]
+gas       = ["petro", "shell", "esso"]
+
+[exclude]
+# <reason> = ["substring", ...]   — matched lines are EXCLUDED (money moved, not spend)
+"CIBC card payment" = ["payment thank you"]
