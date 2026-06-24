@@ -12,9 +12,11 @@ from src.parsers.base import Parser, Statement
 from src.parsers.cibc import CibcParser
 from src.parsers.rbc import RbcParser
 
-# Fingerprints are anchored on section headers that appear on page 0 of each bank's PDF.
-_CIBC_FINGERPRINT = "YOUR NEW CHARGES AND CREDITS"
-_RBC_FINGERPRINT = "Withdrawals($)"
+# Fingerprints are anchored on page 0 of each bank's PDF.
+# "YOUR NEW CHARGES AND CREDITS" appears on a later page, not page 0 — use the bank
+# name, which is unambiguous on the cover page of both statement formats.
+_CIBC_FINGERPRINT = "CIBC"
+_RBC_FINGERPRINT = "RBC"
 
 
 def detect_parser(pdf_path: str) -> Parser:
