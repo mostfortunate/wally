@@ -220,3 +220,7 @@ __marimo__/
 # Wally — personal budget config (copy from wally.example.toml). Keep real numbers
 # off the remote; commit the example template instead.
 wally.toml
+
+# Wally — sample statement PDFs. Full account PII; provided locally only, NEVER commit.
+tests/fixtures/cibc-sample-statement.pdf
+tests/fixtures/rbc-sample-statement.pdf
