@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum, auto
 
-from src.parsers.base import Classified
+from src.parsers.base import Classified, Direction, Disposition
 
 ZERO = Decimal("0")
 
@@ -51,12 +51,38 @@ class CategoryReport:
     status: Status | None  # None when there is no limit to measure against
 
 
+def _net_spend(txns: list[Classified]) -> Decimal:
+    """Net spend for a group: withdrawals are spend, deposits (e.g. refunds) offset it."""
+    total = ZERO
+    for c in txns:
+        if c.txn.direction is Direction.WITHDRAWAL:
+            total += c.txn.amount
+        else:
+            total -= c.txn.amount
+    return total
+
+
 def aggregate(classified: list[Classified], limits: BudgetLimits) -> list[CategoryReport]:
     """Sum CATEGORIZED spend per category and assign a within/under/over status.
 
-    Phase 0 stub — implemented in the Phase 1 vertical slice once classification lands.
+    Reports every category that has either a configured limit or some spend, so a
+    budgeted category with no activity still shows (as underspending). A category with
+    spend but no limit surfaces with `limit`/`status` of None — spend we can't measure.
+    Refunds (CATEGORIZED deposits) net against their category. EXCLUDED and
+    UNCATEGORIZED are intentionally not folded in here.
     """
-    raise NotImplementedError("budget aggregation — Phase 1")
+    spend_by_category: dict[str, list[Classified]] = {}
+    for c in classified:
+        if c.disposition is Disposition.CATEGORIZED and c.category is not None:
+            spend_by_category.setdefault(c.category, []).append(c)
+
+    reports: list[CategoryReport] = []
+    for category in sorted(limits.keys() | spend_by_category.keys()):
+        spent = _net_spend(spend_by_category.get(category, []))
+        limit = limits.get(category)
+        status = status_for(spent, limit) if limit is not None else None
+        reports.append(CategoryReport(category=category, spent=spent, limit=limit, status=status))
+    return reports
 
 
 __all__ = ["BudgetLimits", "CategoryReport", "Status", "aggregate", "status_for"]
