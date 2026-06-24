@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from src.budget import BudgetLimits, aggregate
+from src.budget import BudgetLimits, CategoryReport, Status, aggregate
 from src.budget.config import load_budget_limits
 from src.classification import classify
 from src.ingestion import ingest
@@ -34,9 +34,32 @@ def run(pdf_path: str, limits: BudgetLimits) -> int:
     return 0
 
 
-def render(reports: list) -> None:
-    """Print the within/under/over report to stdout. Phase 1."""
-    raise NotImplementedError("terminal report — Phase 1")
+# Spending sits >, =, or < its limit — the three within/under/over verdicts.
+_STATUS_SYMBOL = {Status.OVER: ">", Status.WITHIN: "=", Status.UNDER: "<"}
+
+
+def render(reports: list[CategoryReport]) -> None:
+    """Print the per-category budget report to stdout.
+
+    Plug-and-play: it needs only the category, its spend, and the within/under/over
+    verdict (`status_for` already encodes the >/=/< logic). Categories with no
+    configured limit are shown as unbudgeted rather than given a verdict.
+    """
+    if not reports:
+        print("No categories to report.")
+        return
+
+    width = max(len(r.category) for r in reports)
+    print("Budget report")
+    for r in reports:
+        if r.limit is None or r.status is None:
+            print(f"  {r.category:<{width}}  ${r.spent:.2f}  (no limit — unbudgeted)")
+        else:
+            symbol = _STATUS_SYMBOL[r.status]
+            print(
+                f"  {r.category:<{width}}  ${r.spent:.2f} {symbol} ${r.limit:.2f}  "
+                f"{r.status.name}"
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
