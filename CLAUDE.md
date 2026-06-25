@@ -149,6 +149,10 @@ Open with `gh pr create`. Title follows Conventional Commits. Body:
 ## Testing
 ```
 
+### Investigation issues
+
+When a GitHub issue asks for investigation or a summary (not implementation), **post findings as a comment on the issue** using `gh issue comment <number> --body "..."`. Do **not** open a PR and do **not** close the issue — the human decides what to do with the findings.
+
 ### Merging
 
 - Always **merge, never rebase**; merge via a merge commit (not squash).
