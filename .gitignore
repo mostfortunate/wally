@@ -228,3 +228,6 @@ tests/fixtures/rbc-sample-statement.pdf
 # Wally — personal budget config (copy from wally.example.toml). Keep real numbers
 # off the remote; commit the example template instead.
 wally.toml
+
+# Wally — statement PDFs contain full account PII; keep off the remote.
+statements/**/*.pdf
