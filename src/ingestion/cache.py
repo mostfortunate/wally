@@ -25,27 +25,27 @@ _CACHE_ROOT = Path(user_cache_dir("wally")) / "statements"
 def cached_parse(pdf_path: str, parser: Parser, *, no_cache: bool = False) -> Statement:
     """Return a parsed Statement, reading from cache when possible.
 
-    On a cache miss (or no_cache=True), the parser runs and the result is written to cache.
-    Pass no_cache=True to force a fresh parse without reading or writing the cache.
+    On a cache miss the parser runs and the result is written to the cache.
+    Pass no_cache=True to force a fresh parse, skipping both cache read and write.
     """
+    if no_cache:
+        return parser.parse(pdf_path)
+
     pdf_bytes = Path(pdf_path).read_bytes()
     sha256 = hashlib.sha256(pdf_bytes).hexdigest()
     cache_file = _CACHE_ROOT / f"sha256-{sha256}.json"
 
-    if not no_cache and cache_file.exists():
+    if cache_file.exists():
         try:
             data = json.loads(cache_file.read_text())
             if data.get("cache_version") == CACHE_VERSION:
                 return _from_json(data)
-        except KeyError, ValueError, InvalidOperation:
+        except (KeyError, ValueError, InvalidOperation, TypeError):
             pass  # corrupt or unreadable cache entry — fall through to re-parse
 
     stmt = parser.parse(pdf_path)
-
-    if not no_cache:
-        _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(json.dumps(_to_json(stmt, sha256), indent=2))
-
+    _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(_to_json(stmt, sha256), indent=2))
     return stmt
 
 
