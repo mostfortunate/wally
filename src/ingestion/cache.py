@@ -40,7 +40,7 @@ def cached_parse(pdf_path: str, parser: Parser, *, no_cache: bool = False) -> St
             data = json.loads(cache_file.read_text())
             if data.get("cache_version") == CACHE_VERSION:
                 return _from_json(data)
-        except (KeyError, ValueError, InvalidOperation, TypeError):
+        except KeyError, ValueError, InvalidOperation, TypeError:
             pass  # corrupt or unreadable cache entry — fall through to re-parse
 
     stmt = parser.parse(pdf_path)
