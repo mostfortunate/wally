@@ -4,7 +4,8 @@ Pipeline: parse (CIBC and/or RBC) → balance gate (RBC only; CIBC's runs inside
 parser) → classify combined transactions → partition gate → aggregate → print report.
 A failed gate aborts with a diff and a non-zero exit; no report is emitted.
 
-Usage:
+Subcommands / usage:
+    wally init                                            # scaffold wally.toml interactively
     wally                                                 # auto-discover latest from statements/
     wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both explicitly
     wally --cibc <statement.pdf>                          # CIBC only
@@ -25,6 +26,7 @@ from src.budget import BudgetLimits, aggregate
 from src.budget.config import load_budget_limits
 from src.classification import ClassificationRules, classify, load_rules
 from src.ingestion.discovery import find_latest
+from src.init_cmd import run_init
 from src.parsers.base import Transaction
 from src.parsers.cibc import CibcParser
 from src.parsers.rbc import RbcParser
@@ -91,6 +93,13 @@ def main(argv: list[str] | None = None) -> int:
             "auto-discovered from <statements-dir>/cibc/ and <statements-dir>/rbc/."
         ),
     )
+    subparsers = parser.add_subparsers(dest="command")
+
+    init_p = subparsers.add_parser("init", help="scaffold wally.toml interactively")
+    init_p.add_argument(
+        "-c", "--config", default=DEFAULT_BUDGET_CONFIG, help="path to write (default: wally.toml)"
+    )
+
     parser.add_argument("--cibc", metavar="PDF", help="path to CIBC credit card statement")
     parser.add_argument("--rbc", metavar="PDF", help="path to RBC chequing statement")
     parser.add_argument(
@@ -106,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "init":
+        return run_init(config_path=args.config)
 
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
