@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -64,6 +65,7 @@ def run(
     is_latest: bool = False,
 ) -> int:
     """Run the full pipeline. Returns a process exit code."""
+    start = time.perf_counter()
     all_transactions: list[Transaction] = []
 
     if cibc_path:
@@ -80,7 +82,8 @@ def run(
     check_partition(all_transactions, classified)
 
     reports = aggregate(classified, limits)
-    render(reports, classified, period=period, is_latest=is_latest)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    render(reports, classified, period=period, is_latest=is_latest, elapsed_ms=elapsed_ms)
     return 0
 
 

@@ -212,3 +212,24 @@ def test_is_latest_without_period_no_badge() -> None:
     out = render_to_str([_report("gas", "50.00", "300.00", Status.WITHIN)], [], is_latest=True)
     assert "(latest)" not in out
     assert "·" not in out
+
+
+# ---------------------------------------------------------------------------
+# Timing line
+# ---------------------------------------------------------------------------
+
+
+def test_timing_line_always_present() -> None:
+    out = render_to_str([_report("gas", "50.00", "300.00", Status.WITHIN)], [])
+    assert "Ran in " in out
+
+
+def test_timing_line_after_uncategorized_warning() -> None:
+    classified = [_uncategorized("30.00", Direction.WITHDRAWAL)]
+    out = render_to_str([], classified)
+    assert out.index("uncategorized") < out.index("Ran in ")
+
+
+def test_timing_line_shows_elapsed_ms() -> None:
+    out = render_to_str([], [], elapsed_ms=142.0)
+    assert "Ran in 142ms." in out
