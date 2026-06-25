@@ -59,7 +59,8 @@ def _render_table(reports: list[CategoryReport], console: Console) -> None:
         return
 
     table = Table(
-        title="[bold]Wally Summary[/bold]",
+        title="Report",
+        title_style="bold",
         box=box.SIMPLE_HEAD,
         show_header=True,
         header_style="bold",
@@ -75,15 +76,12 @@ def _render_table(reports: list[CategoryReport], console: Console) -> None:
     for r in sorted(reports, key=lambda r: r.category):
         status_label = _STATUS_LABEL.get(r.status, "-") if r.status is not None else "-"
         status_style = _STATUS_STYLE.get(r.status, "dim") if r.status is not None else "dim"
-        spent_str = f"${r.spent:,.2f}"
-        # Colour the spent amount red when over budget so the problem stands out.
-        if r.status is Status.OVER:
-            spent_str = f"[bold red]{spent_str}[/bold red]"
+        pct = _pct(r.spent, r.limit)
         table.add_row(
             r.category.upper(),
-            spent_str,
+            f"${r.spent:,.2f}",
             f"${r.limit:,.2f}" if r.limit is not None else "-",
-            _pct(r.spent, r.limit),
+            f"[{status_style}]{pct}[/{status_style}]",
             f"[{status_style}]{status_label}[/{status_style}]",
         )
 
@@ -109,7 +107,6 @@ def _render_uncategorized_warning(classified: list[Classified], console: Console
         parts.append(f"${deposits:,.2f} in deposits")
 
     console.print(f"[yellow]⚠  {count} uncategorized transaction(s) — {', '.join(parts)}[/yellow]")
-    console.print()
 
 
 __all__ = ["render", "render_to_str"]
