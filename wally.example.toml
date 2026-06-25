@@ -17,3 +17,8 @@
 takeout   = "100.00"
 groceries = "600.00"
 gas       = "300.00"
+
+[statements]
+# Root folder containing cibc/ and rbc/ subdirectories. The CLI picks the latest
+# YYYY-MM.pdf from each when no --cibc/--rbc flags are given.
+dir = "statements"
