@@ -202,9 +202,13 @@ def run_init(config_path: str, console: Console | None = None) -> int:
 
     path = Path(config_path)
     if path.exists():
-        overwrite = Confirm.ask(
-            f"[yellow]{path}[/yellow] already exists. Overwrite?", default=False
-        )
+        try:
+            overwrite = Confirm.ask(
+                f"[yellow]{path}[/yellow] already exists. Overwrite?", default=False
+            )
+        except KeyboardInterrupt:
+            console.print("\nAborted.")
+            return 1
         if not overwrite:
             console.print("Aborted — existing config unchanged.")
             return 1
