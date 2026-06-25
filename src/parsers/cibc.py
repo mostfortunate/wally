@@ -157,7 +157,7 @@ def _section_columns(rows: list[list[dict]]) -> _Columns:
     return _Columns(_DESC_LEFT_FALLBACK, _CATEGORY_LEFT_FALLBACK, _AMOUNT_LEFT_FALLBACK)
 
 
-def _statement_year(pdf: pdfplumber.PDF) -> int | None:  # pyright: ignore[reportPrivateImportUsage]
+def _statement_year(pdf) -> int | None:
     """Pull the statement year from the first page (e.g. 'May 24, 2026')."""
     text = pdf.pages[0].extract_text() or ""
     match = re.search(r"[A-Z][a-z]{2,8}\s+\d{1,2},\s+(\d{4})", text)
