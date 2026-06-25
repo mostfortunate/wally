@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 from src.budget import BudgetLimits, aggregate
@@ -30,6 +31,22 @@ from src.parsers.rbc import RbcParser
 from src.reconciliation import ReconciliationError, check_balance, check_partition
 from src.report import render
 
+
+def _period_label(cibc_path: str | None, rbc_path: str | None) -> str | None:
+    """Format a human-readable period from YYYY-MM PDF filenames, or None if unavailable."""
+    months: set[str] = set()
+    for path in (cibc_path, rbc_path):
+        if path is None:
+            continue
+        stem = Path(path).stem
+        if len(stem) == 7 and stem[4] == "-" and stem[:4].isdigit() and stem[5:].isdigit():
+            months.add(stem)
+    if not months:
+        return None
+    labels = [date(int(s[:4]), int(s[5:]), 1).strftime("%B %Y") for s in sorted(months)]
+    return " – ".join(labels)
+
+
 DEFAULT_BUDGET_CONFIG = "wally.toml"
 DEFAULT_RULES_CONFIG = "classification.toml"
 DEFAULT_STATEMENTS_DIR = "statements"
@@ -40,6 +57,9 @@ def run(
     rules: ClassificationRules,
     cibc_path: str | None = None,
     rbc_path: str | None = None,
+    *,
+    period: str | None = None,
+    is_latest: bool = False,
 ) -> int:
     """Run the full pipeline. Returns a process exit code."""
     all_transactions: list[Transaction] = []
@@ -58,7 +78,7 @@ def run(
     check_partition(all_transactions, classified)
 
     reports = aggregate(classified, limits)
-    render(reports, classified)
+    render(reports, classified, period=period, is_latest=is_latest)
     return 0
 
 
@@ -87,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
         base = Path(args.statements_dir)
         cibc_path = find_latest(base / "cibc")
@@ -110,8 +131,16 @@ def main(argv: list[str] | None = None) -> int:
 
     limits = load_budget_limits(args.config)
     rules = load_rules(args.rules)
+    period = _period_label(args.cibc, args.rbc)
     try:
-        return run(limits, rules, cibc_path=args.cibc, rbc_path=args.rbc)
+        return run(
+            limits,
+            rules,
+            cibc_path=args.cibc,
+            rbc_path=args.rbc,
+            period=period,
+            is_latest=discovered,
+        )
     except ReconciliationError as exc:
         print(f"Reconciliation aborted — {exc}", file=sys.stderr)
         return 2
