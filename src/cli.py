@@ -26,6 +26,8 @@ from pathlib import Path
 from src.budget import BudgetLimits, aggregate
 from src.budget.config import load_budget_limits
 from src.classification import ClassificationRules, classify, load_rules
+from src.ingestion.cache import cached_parse
+from src.ingestion.cache import clear as cache_clear
 from src.ingestion.discovery import find_latest
 from src.init_cmd import run_init
 from src.parsers.base import Transaction
@@ -63,18 +65,19 @@ def run(
     *,
     period: str | None = None,
     is_latest: bool = False,
+    no_cache: bool = False,
 ) -> int:
     """Run the full pipeline. Returns a process exit code."""
     start = time.perf_counter()
     all_transactions: list[Transaction] = []
 
     if cibc_path:
-        cibc_stmt = CibcParser().parse(cibc_path)
+        cibc_stmt = cached_parse(cibc_path, CibcParser(), no_cache=no_cache)
         # CIBC Gate-1 runs inside the parser per-card block; no statement-level balances.
         all_transactions.extend(cibc_stmt.transactions)
 
     if rbc_path:
-        rbc_stmt = RbcParser().parse(rbc_path)
+        rbc_stmt = cached_parse(rbc_path, RbcParser(), no_cache=no_cache)
         check_balance(rbc_stmt)
         all_transactions.extend(rbc_stmt.transactions)
 
@@ -103,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
         "-c", "--config", default=DEFAULT_BUDGET_CONFIG, help="path to write (default: wally.toml)"
     )
 
+    cache_p = subparsers.add_parser("cache", help="manage the statement parse cache")
+    cache_sub = cache_p.add_subparsers(dest="cache_action", required=True)
+    cache_sub.add_parser("clear", help="delete all cached statement parses (~/.cache/wally/)")
+
     parser.add_argument("--cibc", metavar="PDF", help="path to CIBC credit card statement")
     parser.add_argument("--rbc", metavar="PDF", help="path to RBC chequing statement")
     parser.add_argument(
@@ -117,10 +124,24 @@ def main(argv: list[str] | None = None) -> int:
         metavar="DIR",
         help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="re-parse from PDF, skipping the statement cache",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "init":
         return run_init(config_path=args.config)
+
+    if args.command == "cache":
+        if args.cache_action == "clear":
+            n = cache_clear()
+            if n == 0:
+                print("Cache is already empty.")
+            else:
+                print(f"Cleared {n} cached statement parse(s).")
+        return 0
 
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
@@ -160,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             rbc_path=args.rbc,
             period=period,
             is_latest=discovered,
+            no_cache=args.no_cache,
         )
     except ReconciliationError as exc:
         print(f"Reconciliation aborted — {exc}", file=sys.stderr)
