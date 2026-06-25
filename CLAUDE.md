@@ -42,10 +42,6 @@ reasons recorded in the module-level CLAUDE.md files.
 > ⏳ Pre-v1: these out-of-scope constraints exist to keep the initial build focused. Revisit at v1.
 
 - **No frontend, no banking-API integration, no notifications.** v1 is a CLI.
-- **No automated statement download (Playwright etc.).** Rejected: would require storing banking
-  credentials on the host (Raspberry Pi) — not worth it for a once-a-month task. Also RBC's 2FA
-  requires tapping a push notification in the app, which is impractical to automate. Statements
-  are uploaded **manually**.
 - **No transaction→budget-month attribution logic.** Because upload is manual and one statement
   at a time, **the statement *is* the scope.** We parse the transactions in the PDF and sum them.
   Do **not** add date-to-calendar-month mapping.
