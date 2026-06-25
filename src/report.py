@@ -30,21 +30,33 @@ def render(
     reports: list[CategoryReport],
     classified: list[Classified],
     console: Console | None = None,
+    *,
+    period: str | None = None,
+    is_latest: bool = False,
 ) -> None:
-    """Print the Wally Summary table and any uncategorized warning to stdout."""
+    """Print the report table and any uncategorized warning to stdout."""
     if console is None:
         console = Console()
-    _render_table(reports, console)
+    _render_table(reports, console, period=period, is_latest=is_latest)
     _render_uncategorized_warning(classified, console)
 
 
 def render_to_str(
     reports: list[CategoryReport],
     classified: list[Classified],
+    *,
+    period: str | None = None,
+    is_latest: bool = False,
 ) -> str:
     """Render to a plain string (no colour). Used by tests."""
     buf = io.StringIO()
-    render(reports, classified, console=Console(file=buf, no_color=True, highlight=False))
+    render(
+        reports,
+        classified,
+        console=Console(file=buf, no_color=True, highlight=False),
+        period=period,
+        is_latest=is_latest,
+    )
     return buf.getvalue()
 
 
@@ -54,12 +66,24 @@ def _pct(spent: Decimal, limit: Decimal | None) -> str:
     return f"{int(spent / limit * 100)}%"
 
 
-def _render_table(reports: list[CategoryReport], console: Console) -> None:
+def _render_table(
+    reports: list[CategoryReport],
+    console: Console,
+    *,
+    period: str | None = None,
+    is_latest: bool = False,
+) -> None:
     if not reports:
         return
 
+    title = "Report"
+    if period:
+        suffix = " (latest)" if is_latest else ""
+        title = f"Report  ·  {period}{suffix}"
+
     table = Table(
-        title="[bold]Wally Summary[/bold]",
+        title=title,
+        title_style="bold",
         box=box.SIMPLE_HEAD,
         show_header=True,
         header_style="bold",
@@ -75,15 +99,12 @@ def _render_table(reports: list[CategoryReport], console: Console) -> None:
     for r in sorted(reports, key=lambda r: r.category):
         status_label = _STATUS_LABEL.get(r.status, "-") if r.status is not None else "-"
         status_style = _STATUS_STYLE.get(r.status, "dim") if r.status is not None else "dim"
-        spent_str = f"${r.spent:,.2f}"
-        # Colour the spent amount red when over budget so the problem stands out.
-        if r.status is Status.OVER:
-            spent_str = f"[bold red]{spent_str}[/bold red]"
+        pct = _pct(r.spent, r.limit)
         table.add_row(
             r.category.upper(),
-            spent_str,
+            f"${r.spent:,.2f}",
             f"${r.limit:,.2f}" if r.limit is not None else "-",
-            _pct(r.spent, r.limit),
+            f"[{status_style}]{pct}[/{status_style}]",
             f"[{status_style}]{status_label}[/{status_style}]",
         )
 
@@ -109,7 +130,6 @@ def _render_uncategorized_warning(classified: list[Classified], console: Console
         parts.append(f"${deposits:,.2f} in deposits")
 
     console.print(f"[yellow]⚠  {count} uncategorized transaction(s) — {', '.join(parts)}[/yellow]")
-    console.print()
 
 
 __all__ = ["render", "render_to_str"]

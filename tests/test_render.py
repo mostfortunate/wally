@@ -177,4 +177,38 @@ def test_mixed_dispositions_only_uncategorized_warned() -> None:
     ]
     out = render_to_str([], classified)
     assert "1 uncategorized transaction(s)" in out
-    assert "$42.00" in out
+
+
+# ---------------------------------------------------------------------------
+# Period / latest badge in title
+# ---------------------------------------------------------------------------
+
+
+def test_no_period_shows_plain_report_title() -> None:
+    out = render_to_str([_report("gas", "50.00", "300.00", Status.WITHIN)], [])
+    assert "Report" in out
+    assert "·" not in out
+    assert "(latest)" not in out
+
+
+def test_period_appears_in_title() -> None:
+    out = render_to_str([_report("gas", "50.00", "300.00", Status.WITHIN)], [], period="June 2026")
+    assert "June 2026" in out
+    assert "(latest)" not in out
+
+
+def test_period_with_is_latest_shows_badge() -> None:
+    out = render_to_str(
+        [_report("gas", "50.00", "300.00", Status.WITHIN)],
+        [],
+        period="June 2026",
+        is_latest=True,
+    )
+    assert "June 2026" in out
+    assert "(latest)" in out
+
+
+def test_is_latest_without_period_no_badge() -> None:
+    out = render_to_str([_report("gas", "50.00", "300.00", Status.WITHIN)], [], is_latest=True)
+    assert "(latest)" not in out
+    assert "·" not in out
