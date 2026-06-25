@@ -1,10 +1,13 @@
-"""Entry point + terminal report.
+"""Wally CLI — budget reconciliation from bank statement PDFs.
 
-Pipeline: ingest (detect bank → parse) → balance gate (RBC only; CIBC's runs inside
-the parser) → classify → partition gate → aggregate → print report. A failed gate
-aborts with a diff and a non-zero exit; no report is emitted on a failed reconciliation.
+Pipeline: parse (CIBC and/or RBC) → balance gate (RBC only; CIBC's runs inside the
+parser) → classify combined transactions → partition gate → aggregate → print report.
+A failed gate aborts with a diff and a non-zero exit; no report is emitted.
 
-Run:  uv run python -m src.cli <statement.pdf>
+Usage:
+    wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both (default use)
+    wally --cibc <statement.pdf>                          # CIBC only
+    wally --rbc  <statement.pdf>                          # RBC only
 """
 
 from __future__ import annotations
@@ -15,7 +18,9 @@ import sys
 from src.budget import BudgetLimits, aggregate
 from src.budget.config import load_budget_limits
 from src.classification import ClassificationRules, classify, load_rules
-from src.ingestion import ingest
+from src.parsers.base import Transaction
+from src.parsers.cibc import CibcParser
+from src.parsers.rbc import RbcParser
 from src.reconciliation import ReconciliationError, check_balance, check_partition
 from src.report import render
 
@@ -23,17 +28,27 @@ DEFAULT_BUDGET_CONFIG = "wally.toml"
 DEFAULT_RULES_CONFIG = "classification.toml"
 
 
-def run(pdf_path: str, limits: BudgetLimits, rules: ClassificationRules) -> int:
-    """Run the full pipeline for one statement. Returns a process exit code."""
-    statement = ingest(pdf_path)
+def run(
+    limits: BudgetLimits,
+    rules: ClassificationRules,
+    cibc_path: str | None = None,
+    rbc_path: str | None = None,
+) -> int:
+    """Run the full pipeline. Returns a process exit code."""
+    all_transactions: list[Transaction] = []
 
-    # CIBC's Gate-1 runs inside the parser (per-card block tie-out). Only run the
-    # statement-level balance gate for banks that populate opening/closing balances.
-    if statement.opening_balance is not None or statement.closing_balance is not None:
-        check_balance(statement)
+    if cibc_path:
+        cibc_stmt = CibcParser().parse(cibc_path)
+        # CIBC Gate-1 runs inside the parser per-card block; no statement-level balances.
+        all_transactions.extend(cibc_stmt.transactions)
 
-    classified = classify(statement.transactions, rules)
-    check_partition(statement.transactions, classified)
+    if rbc_path:
+        rbc_stmt = RbcParser().parse(rbc_path)
+        check_balance(rbc_stmt)
+        all_transactions.extend(rbc_stmt.transactions)
+
+    classified = classify(all_transactions, rules)
+    check_partition(all_transactions, classified)
 
     reports = aggregate(classified, limits)
     render(reports, classified)
@@ -42,9 +57,12 @@ def run(pdf_path: str, limits: BudgetLimits, rules: ClassificationRules) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="wally", description="Budget reconciliation from a bank statement PDF."
+        prog="wally",
+        description="Budget reconciliation from bank statement PDFs.",
+        epilog="At least one of --cibc or --rbc is required.",
     )
-    parser.add_argument("statement", help="path to a statement PDF")
+    parser.add_argument("--cibc", metavar="PDF", help="path to CIBC credit card statement")
+    parser.add_argument("--rbc", metavar="PDF", help="path to RBC chequing statement")
     parser.add_argument(
         "-c", "--config", default=DEFAULT_BUDGET_CONFIG, help="path to budget config TOML"
     )
@@ -53,10 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if not args.cibc and not args.rbc:
+        parser.error("at least one of --cibc or --rbc is required")
+
     limits = load_budget_limits(args.config)
     rules = load_rules(args.rules)
     try:
-        return run(args.statement, limits, rules)
+        return run(limits, rules, cibc_path=args.cibc, rbc_path=args.rbc)
     except ReconciliationError as exc:
         print(f"Reconciliation aborted — {exc}", file=sys.stderr)
         return 2

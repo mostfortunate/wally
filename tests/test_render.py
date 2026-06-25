@@ -1,14 +1,12 @@
-"""Tests for src/report.py — render() stdout output via capsys."""
+"""Tests for src/report.py — render output via render_to_str (no capsys needed)."""
 
 from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
 from src.budget import CategoryReport, Status
 from src.parsers.base import Classified, Direction, Disposition, Transaction
-from src.report import render
+from src.report import render_to_str
 
 ZERO = Decimal("0")
 
@@ -36,11 +34,7 @@ def _uncategorized(amount: str, direction: Direction = Direction.WITHDRAWAL) -> 
 
 
 def _excluded(amount: str, reason: str = "transfer") -> Classified:
-    return Classified(
-        txn=_txn(amount),
-        disposition=Disposition.EXCLUDED,
-        reason=reason,
-    )
+    return Classified(txn=_txn(amount), disposition=Disposition.EXCLUDED, reason=reason)
 
 
 def _report(
@@ -58,134 +52,112 @@ def _report(
 
 
 # ---------------------------------------------------------------------------
-# Status labels
+# Status labels — categories are uppercased; labels use ✓/↓/↑ prefix
 # ---------------------------------------------------------------------------
 
 
-def test_within_appears_in_output(capsys: pytest.CaptureFixture[str]) -> None:
-    reports = [_report("takeout", "45.20", "60.00", Status.WITHIN)]
-    render(reports, [])
-    out = capsys.readouterr().out
+def test_within_appears_in_output() -> None:
+    out = render_to_str([_report("takeout", "45.20", "60.00", Status.WITHIN)], [])
     assert "WITHIN" in out
-    assert "takeout" in out
+    assert "TAKEOUT" in out
     assert "$45.20" in out
     assert "$60.00" in out
 
 
-def test_under_appears_in_output(capsys: pytest.CaptureFixture[str]) -> None:
-    reports = [_report("groceries", "12.00", "80.00", Status.UNDER)]
-    render(reports, [])
-    out = capsys.readouterr().out
+def test_under_appears_in_output() -> None:
+    out = render_to_str([_report("groceries", "12.00", "80.00", Status.UNDER)], [])
     assert "UNDER" in out
-    assert "groceries" in out
+    assert "GROCERIES" in out
     assert "$12.00" in out
     assert "$80.00" in out
 
 
-def test_over_appears_in_output(capsys: pytest.CaptureFixture[str]) -> None:
-    reports = [_report("gas", "210.50", "200.00", Status.OVER)]
-    render(reports, [])
-    out = capsys.readouterr().out
+def test_over_appears_in_output() -> None:
+    out = render_to_str([_report("gas", "210.50", "200.00", Status.OVER)], [])
     assert "OVER" in out
-    assert "gas" in out
+    assert "GAS" in out
     assert "$210.50" in out
     assert "$200.00" in out
 
 
 # ---------------------------------------------------------------------------
-# No-limit category
+# No-limit category: shows "-" in LIMIT/USED/STATUS columns, no status token
 # ---------------------------------------------------------------------------
 
 
-def test_no_limit_shows_no_limit_label(capsys: pytest.CaptureFixture[str]) -> None:
-    reports = [_report("pets", "40.00", None, None)]
-    render(reports, [])
-    out = capsys.readouterr().out
-    assert "no limit" in out
-    assert "pets" in out
+def test_no_limit_shows_dash() -> None:
+    out = render_to_str([_report("pets", "40.00", None, None)], [])
+    assert "PETS" in out
     assert "$40.00" in out
-    # Must NOT show a status token when there is no limit
     assert "WITHIN" not in out
     assert "UNDER" not in out
     assert "OVER" not in out
 
 
 # ---------------------------------------------------------------------------
-# Alphabetical ordering
+# Alphabetical ordering (uppercase names)
 # ---------------------------------------------------------------------------
 
 
-def test_categories_sorted_alphabetically(capsys: pytest.CaptureFixture[str]) -> None:
+def test_categories_sorted_alphabetically() -> None:
     reports = [
         _report("takeout", "45.00", "60.00", Status.WITHIN),
         _report("gas", "100.00", "200.00", Status.UNDER),
         _report("groceries", "80.00", "80.00", Status.WITHIN),
     ]
-    render(reports, [])
-    out = capsys.readouterr().out
-    gas_pos = out.index("gas")
-    groceries_pos = out.index("groceries")
-    takeout_pos = out.index("takeout")
-    assert gas_pos < groceries_pos < takeout_pos
+    out = render_to_str(reports, [])
+    assert out.index("GAS") < out.index("GROCERIES") < out.index("TAKEOUT")
 
 
 # ---------------------------------------------------------------------------
-# Uncategorized warning
+# Uncategorized warning: uses ⚠ prefix, deposits omitted when zero
 # ---------------------------------------------------------------------------
 
 
-def test_uncategorized_warning_printed(capsys: pytest.CaptureFixture[str]) -> None:
+def test_uncategorized_warning_printed() -> None:
     classified = [
         _uncategorized("50.00", Direction.WITHDRAWAL),
         _uncategorized("20.00", Direction.WITHDRAWAL),
         _uncategorized("5.00", Direction.DEPOSIT),
     ]
-    render([], classified)
-    out = capsys.readouterr().out
-    assert "WARNING" in out
+    out = render_to_str([], classified)
+    assert "uncategorized" in out
     assert "3 uncategorized transaction(s)" in out
-    assert "$70.00" in out  # withdrawals total
-    assert "$5.00" in out  # deposits total
+    assert "$70.00" in out   # withdrawals total
+    assert "$5.00" in out    # deposits total
 
 
-def test_uncategorized_warning_withdrawal_only(capsys: pytest.CaptureFixture[str]) -> None:
-    classified = [_uncategorized("87.40", Direction.WITHDRAWAL)]
-    render([], classified)
-    out = capsys.readouterr().out
-    assert "WARNING" in out
+def test_uncategorized_warning_withdrawal_only() -> None:
+    out = render_to_str([], [_uncategorized("87.40", Direction.WITHDRAWAL)])
+    assert "uncategorized" in out
     assert "$87.40" in out
-    assert "$0.00" in out
+    # Deposits are omitted from the line when zero
+    assert "deposits" not in out
 
 
-def test_uncategorized_warning_deposit_only(capsys: pytest.CaptureFixture[str]) -> None:
-    classified = [_uncategorized("15.00", Direction.DEPOSIT)]
-    render([], classified)
-    out = capsys.readouterr().out
-    assert "WARNING" in out
-    assert "$0.00" in out  # withdrawals
-    assert "$15.00" in out  # deposits
+def test_uncategorized_warning_deposit_only() -> None:
+    out = render_to_str([], [_uncategorized("15.00", Direction.DEPOSIT)])
+    assert "uncategorized" in out
+    assert "$15.00" in out
 
 
 # ---------------------------------------------------------------------------
-# No uncategorized → no warning
+# No uncategorized → no warning line at all
 # ---------------------------------------------------------------------------
 
 
-def test_zero_uncategorized_no_warning(capsys: pytest.CaptureFixture[str]) -> None:
+def test_zero_uncategorized_no_warning() -> None:
     classified = [
         _categorized("30.00", "takeout"),
         _excluded("100.00", "CIBC card payment"),
     ]
-    render([], classified)
-    out = capsys.readouterr().out
-    assert "WARNING" not in out
+    out = render_to_str([], classified)
     assert "uncategorized" not in out.lower()
 
 
-def test_empty_classified_no_warning(capsys: pytest.CaptureFixture[str]) -> None:
-    render([], [])
-    out = capsys.readouterr().out
-    assert "WARNING" not in out
+def test_empty_classified_no_warning() -> None:
+    out = render_to_str([], [])
+    assert "uncategorized" not in out.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -193,20 +165,16 @@ def test_empty_classified_no_warning(capsys: pytest.CaptureFixture[str]) -> None
 # ---------------------------------------------------------------------------
 
 
-def test_empty_reports_no_crash(capsys: pytest.CaptureFixture[str]) -> None:
-    render([], [])
-    # Should not raise; output may be empty or minimal
-    capsys.readouterr()
+def test_empty_reports_no_crash() -> None:
+    render_to_str([], [])  # must not raise
 
 
-def test_mixed_dispositions_only_uncategorized_warned(capsys: pytest.CaptureFixture[str]) -> None:
+def test_mixed_dispositions_only_uncategorized_warned() -> None:
     classified = [
         _categorized("30.00", "food"),
         _excluded("200.00", "card payment"),
         _uncategorized("42.00"),
     ]
-    render([], classified)
-    out = capsys.readouterr().out
-    assert "WARNING" in out
+    out = render_to_str([], classified)
     assert "1 uncategorized transaction(s)" in out
     assert "$42.00" in out

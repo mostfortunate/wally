@@ -32,8 +32,18 @@ from src.parsers.base import Direction, Parser, Statement, Transaction
 _MONEY_RE = re.compile(r"^\$?-?[\d,]+\.\d{2}-?$")
 
 _MONTHS = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 # Fallback column x-anchors (used only if the section header can't be located).
@@ -154,17 +164,11 @@ def _statement_year(pdf: pdfplumber.PDF) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _verify_card_total(
-    transactions: list[Transaction], total: Decimal, card: str
-) -> None:
+def _verify_card_total(transactions: list[Transaction], total: Decimal, card: str) -> None:
     """Gate 1 (CIBC): charges minus credits must equal the card's 'Total for' line."""
     zero = Decimal("0")
-    charges = sum(
-        (t.amount for t in transactions if t.direction is Direction.WITHDRAWAL), zero
-    )
-    credits = sum(
-        (t.amount for t in transactions if t.direction is Direction.DEPOSIT), zero
-    )
+    charges = sum((t.amount for t in transactions if t.direction is Direction.WITHDRAWAL), zero)
+    credits = sum((t.amount for t in transactions if t.direction is Direction.DEPOSIT), zero)
     net = charges - credits
     if net != total:
         raise AssertionError(

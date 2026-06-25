@@ -67,17 +67,13 @@ def test_no_match_is_uncategorized() -> None:
 
 
 def test_ambiguous_categories_raise() -> None:
-    rules = parse_rules(
-        {"categories": {"takeout": ["amazon"], "shopping": ["amazon"]}}
-    )
+    rules = parse_rules({"categories": {"takeout": ["amazon"], "shopping": ["amazon"]}})
     with pytest.raises(ClassificationError, match="multiple categories"):
         classify([_txn("AMAZON* PURCHASE")], rules)
 
 
 def test_ambiguous_exclusions_raise() -> None:
-    rules = parse_rules(
-        {"exclude": {"reason a": ["payment"], "reason b": ["payment"]}}
-    )
+    rules = parse_rules({"exclude": {"reason a": ["payment"], "reason b": ["payment"]}})
     with pytest.raises(ClassificationError, match="multiple exclusion reasons"):
         classify([_txn("PAYMENT RECEIVED")], rules)
 
