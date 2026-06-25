@@ -40,7 +40,7 @@ def render(
         console = Console()
     _render_table(reports, console, period=period, is_latest=is_latest)
     _render_uncategorized_warning(classified, console)
-    console.print(f"[dim]Ran in {elapsed_ms:.0f}ms.[/dim]")
+    console.print(f"⏳ [green]Ran in {elapsed_ms:.0f}ms.[/green]")
 
 
 def render_to_str(
