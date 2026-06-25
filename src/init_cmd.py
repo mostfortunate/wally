@@ -1,8 +1,10 @@
 """Interactive wizard for `wally init` — scaffolds wally.toml.
 
-Presents a pre-selected checkbox list of categories (questionary), collects a
-monthly limit for each chosen category, and writes wally.toml. Aborts
-non-destructively if the file already exists and the user declines to overwrite.
+Presents all categories in a navigable form (prompt_toolkit Application),
+collects an optional monthly limit for each, and writes wally.toml.
+Empty field = category ignored. 0 = tracked with no cap. Any positive
+number = tracked with that budget. Aborts non-destructively if the file
+already exists and the user declines to overwrite.
 """
 
 from __future__ import annotations
@@ -10,9 +12,16 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-import questionary
+from prompt_toolkit import Application
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, VSplit, Window
+from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.styles import Style
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Confirm
 
 # Ordered default categories. Key becomes the TOML key; label is displayed.
 CATEGORIES: list[tuple[str, str]] = [
@@ -28,31 +37,115 @@ CATEGORIES: list[tuple[str, str]] = [
     ("services", "Services"),
 ]
 
-
-def _select_categories() -> list[tuple[str, str]] | None:
-    """Checkbox multiselect — all pre-selected. Returns None if the user cancels."""
-    choices = [
-        questionary.Choice(label, value=(key, label), checked=True) for key, label in CATEGORIES
-    ]
-    result = questionary.checkbox(
-        "Select budget categories",
-        choices=choices,
-        instruction="(space to toggle, enter to confirm)",
-    ).ask()
-    return result  # list of (key, label) tuples, or None on Ctrl-C
+_LABEL_WIDTH = 18
+_INPUT_WIDTH = 20
+_HINT = "↑↓ navigate · empty to skip · 0 = track no cap · Ctrl+D confirm · Ctrl+C cancel"
 
 
-def prompt_limit(label: str, console: Console) -> Decimal:
-    """Prompt until the user enters a valid positive decimal."""
-    while True:
-        raw = Prompt.ask(f"  Monthly limit for [bold]{label}[/bold]")
-        try:
-            value = Decimal(raw.strip().lstrip("$").replace(",", ""))
-            if value > 0:
-                return value
-        except InvalidOperation:
-            pass
-        console.print("  [red]Enter a positive number (e.g. 250 or 250.00)[/red]")
+def _run_category_form() -> dict[str, Decimal] | None:
+    """Inline navigable form — returns key→Decimal for confirmed categories, or None on abort."""
+    buffers = [Buffer(name=key, multiline=False) for key, _ in CATEGORIES]
+    status: list[str] = [""]  # mutable slot shared across closures
+
+    kb = KeyBindings()
+
+    @kb.add("down")
+    @kb.add("tab")
+    def move_next(event: KeyPressEvent) -> None:
+        cur = event.app.layout.current_buffer
+        for i, buf in enumerate(buffers):
+            if buf is cur:
+                event.app.layout.focus(buffers[(i + 1) % len(buffers)])
+                return
+
+    @kb.add("up")
+    def move_prev(event: KeyPressEvent) -> None:
+        cur = event.app.layout.current_buffer
+        for i, buf in enumerate(buffers):
+            if buf is cur:
+                event.app.layout.focus(buffers[(i - 1) % len(buffers)])
+                return
+
+    @kb.add("c-d")
+    def confirm(event: KeyPressEvent) -> None:
+        result: dict[str, Decimal] = {}
+        first_bad: Buffer | None = None
+        for buf, (key, label) in zip(buffers, CATEGORIES, strict=True):
+            raw = buf.text.strip()
+            if not raw:
+                continue
+            try:
+                value = Decimal(raw.lstrip("$").replace(",", ""))
+                if value < 0:
+                    raise InvalidOperation
+                result[key] = value
+            except InvalidOperation:
+                if first_bad is None:
+                    first_bad = buf
+                    status[0] = f"Invalid value for {label}: enter a number ≥ 0 or leave empty"
+        if first_bad is not None:
+            event.app.layout.focus(first_bad)
+            event.app.invalidate()
+            return
+        status[0] = ""
+        event.app.exit(result=result)
+
+    @kb.add("c-c")
+    @kb.add("escape")
+    def abort(event: KeyPressEvent) -> None:
+        event.app.exit(result=None)
+
+    def make_row(buf: Buffer, label: str) -> VSplit:
+        def get_label() -> StyleAndTextTuples:
+            try:
+                focused = get_app().layout.current_buffer is buf
+            except Exception:
+                focused = False
+            style = "class:focused" if focused else ""
+            return [(style, label.ljust(_LABEL_WIDTH))]
+
+        return VSplit(
+            [
+                Window(content=FormattedTextControl(get_label), width=_LABEL_WIDTH),
+                Window(content=FormattedTextControl(" │ "), width=3),
+                Window(content=BufferControl(buffer=buf, focusable=True), width=_INPUT_WIDTH),
+                Window(content=FormattedTextControl(" │"), width=2),
+            ]
+        )
+
+    def get_status() -> StyleAndTextTuples:
+        msg = status[0]
+        return [("class:error" if msg else "class:hint", msg or _HINT)]
+
+    layout = Layout(
+        HSplit(
+            [
+                Window(content=FormattedTextControl("Budget limits\n"), height=1),
+                *[
+                    make_row(buf, label)
+                    for buf, (_, label) in zip(buffers, CATEGORIES, strict=True)
+                ],
+                Window(content=FormattedTextControl(get_status), height=1),
+            ]
+        ),
+        focused_element=buffers[0],
+    )
+    style = Style.from_dict(
+        {
+            "focused": "bold reverse",
+            "error": "fg:ansired bold",
+            "hint": "fg:ansigreen",
+        }
+    )
+    app: Application[dict[str, Decimal] | None] = Application(
+        layout=layout,
+        key_bindings=kb,
+        style=style,
+        full_screen=False,
+        erase_when_done=False,
+        mouse_support=False,
+    )
+    return app.run()
 
 
 def build_toml(limits: dict[str, Decimal]) -> str:
@@ -82,20 +175,14 @@ def run_init(config_path: str, console: Console | None = None) -> int:
             console.print("Aborted — existing config unchanged.")
             return 1
 
-    console.print()
-    selected = _select_categories()
+    limits = _run_category_form()
 
-    if selected is None:
+    if limits is None:
         console.print("\nAborted.")
         return 1
-    if not selected:
-        console.print("[yellow]No categories selected — nothing written.[/yellow]")
+    if not limits:
+        console.print("[yellow]No limits set — nothing written.[/yellow]")
         return 1
-
-    console.print()
-    limits: dict[str, Decimal] = {}
-    for key, label in selected:
-        limits[key] = prompt_limit(label, console)
 
     path.write_text(build_toml(limits))
     console.print(f"\n[green]✓[/green] Written to [bold]{path}[/bold]\n")
