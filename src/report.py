@@ -33,12 +33,14 @@ def render(
     *,
     period: str | None = None,
     is_latest: bool = False,
+    elapsed_ms: float = 0.0,
 ) -> None:
-    """Print the report table and any uncategorized warning to stdout."""
+    """Print the report table, any uncategorized warning, and elapsed time to stdout."""
     if console is None:
         console = Console()
     _render_table(reports, console, period=period, is_latest=is_latest)
     _render_uncategorized_warning(classified, console)
+    console.print(f"[dim]Ran in {elapsed_ms:.0f}ms.[/dim]")
 
 
 def render_to_str(
@@ -47,6 +49,7 @@ def render_to_str(
     *,
     period: str | None = None,
     is_latest: bool = False,
+    elapsed_ms: float = 0.0,
 ) -> str:
     """Render to a plain string (no colour). Used by tests."""
     buf = io.StringIO()
@@ -56,6 +59,7 @@ def render_to_str(
         console=Console(file=buf, no_color=True, highlight=False),
         period=period,
         is_latest=is_latest,
+        elapsed_ms=elapsed_ms,
     )
     return buf.getvalue()
 
@@ -87,7 +91,7 @@ def _render_table(
         box=box.SIMPLE_HEAD,
         show_header=True,
         header_style="bold",
-        title_justify="left",
+        title_justify="center",
         pad_edge=False,
     )
     table.add_column("CATEGORY", style="bold")
