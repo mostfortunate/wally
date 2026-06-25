@@ -36,7 +36,7 @@ CATEGORIES: list[tuple[str, str]] = [
     ("services", "Services"),
 ]
 
-_HINT = "↑↓ navigate · empty to skip · 0 = track no cap · Ctrl+D confirm · Ctrl+C cancel"
+_HINT = "↑↓ navigate · empty to skip · Ctrl+D confirm · Ctrl+C cancel"
 _INPUT_WIDTH = 12
 
 
@@ -116,6 +116,7 @@ def _run_category_form() -> dict[str, Decimal] | None:
     def make_row(buf: Buffer, label: str) -> VSplit:
         return VSplit(
             [
+                Window(content=FormattedTextControl("  "), width=2, height=1),
                 Window(content=make_label(buf, label), dont_extend_width=True, height=1),
                 Window(
                     content=BufferControl(
