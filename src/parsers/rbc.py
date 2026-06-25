@@ -182,7 +182,7 @@ def extract_columns(rows: list[list[dict]]) -> _Columns | None:
     return None
 
 
-def _statement_year(pdf: pdfplumber.PDF) -> int:
+def _statement_year(pdf: pdfplumber.PDF) -> int:  # pyright: ignore[reportPrivateImportUsage]
     """Extract the statement year from the "FromMay1,2026toJune2,2026" header token."""
     for page in pdf.pages[:2]:
         for word in page.extract_words(use_text_flow=False):
