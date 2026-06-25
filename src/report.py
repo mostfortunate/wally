@@ -129,7 +129,7 @@ def _render_uncategorized_warning(classified: list[Classified], console: Console
     if deposits:
         parts.append(f"${deposits:,.2f} in deposits")
 
-    console.print(f"[yellow]⚠  {count} uncategorized transaction(s) — {', '.join(parts)}[/yellow]")
+    console.print(f"[yellow]⚠ {count} uncategorized transaction(s) — {', '.join(parts)}[/yellow]")
 
 
 __all__ = ["render", "render_to_str"]
