@@ -1,9 +1,18 @@
 """Wally CLI — budget reconciliation from bank statement PDFs.
 
-Subcommands:
+Pipeline: parse (CIBC and/or RBC) → balance gate (RBC only; CIBC's runs inside the
+parser) → classify combined transactions → partition gate → aggregate → print report.
+A failed gate aborts with a diff and a non-zero exit; no report is emitted.
+
+Subcommands / usage:
     wally init                                            # scaffold wally.toml interactively
     wally                                                 # auto-discover latest from statements/
     wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both explicitly
+    wally --cibc <statement.pdf>                          # CIBC only
+    wally --rbc  <statement.pdf>                          # RBC only
+
+When no --cibc/--rbc flags are given, wally looks for the most recent YYYY-MM.pdf
+in statements/cibc/ and statements/rbc/ (or the directory given by --statements-dir).
 """
 
 from __future__ import annotations
@@ -79,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="wally",
         description="Budget reconciliation from bank statement PDFs.",
+        epilog=(
+            "When no --cibc/--rbc flags are given, the latest YYYY-MM.pdf is "
+            "auto-discovered from <statements-dir>/cibc/ and <statements-dir>/rbc/."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command")
 
