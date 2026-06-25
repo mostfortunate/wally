@@ -37,24 +37,9 @@ reasons recorded in the module-level CLAUDE.md files.
 
 ---
 
-## What it answers
-
-> For each budget category this period: did I spend within my limit, under it, or over it?
-
-Input: one statement PDF at a time, uploaded manually. Output (v1): terminal report.
-
----
-
 ## Scope
 
-### In scope (v1)
-
-- Parse RBC chequing/debit statements and CIBC credit-card statements (different layouts).
-- Classify every transaction via a configurable, extensible engine.
-- Aggregate against per-category monthly limits.
-- Emit a monthly report (terminal output) with within/under/over status per category.
-
-### Out of scope — and *why* (so it doesn't get reintroduced)
+> ⏳ Pre-v1: these out-of-scope constraints exist to keep the initial build focused. Revisit at v1.
 
 - **No frontend, no banking-API integration, no notifications.** v1 is a CLI.
 - **No automated statement download (Playwright etc.).** Rejected: would require storing banking
@@ -62,42 +47,38 @@ Input: one statement PDF at a time, uploaded manually. Output (v1): terminal rep
   requires tapping a push notification in the app, which is impractical to automate. Statements
   are uploaded **manually**.
 - **No transaction→budget-month attribution logic.** Because upload is manual and one statement
-  at a time, **the statement *is* the scope.** We parse the transactions in the PDF and sum them;
-  there is no need to map a transaction's date to a calendar month or reconcile a billing cycle
-  (e.g. CIBC's 25th–24th cycle) against a calendar month. Do **not** add this.
+  at a time, **the statement *is* the scope.** We parse the transactions in the PDF and sum them.
+  Do **not** add date-to-calendar-month mapping.
 
 ---
 
 ## Tech stack
 
-| Concern         | Choice                                | Status     |
-| --------------- | ------------------------------------- | ---------- |
-| Language        | Python 3.14+                          | decided    |
-| PDF parsing     | `pdfplumber` (word-level coordinates) | decided    |
-| Money type      | `decimal.Decimal`                     | decided    |
-| Interface       | CLI over a clean library core         | decided    |
-| Testing         | `pytest` + golden-file fixtures       | convention |
-| Env / packaging | `uv`                                  | convention |
-| Report output   | `rich` for colour & alignment         | convention |
+| Concern         | Choice                                |
+| --------------- | ------------------------------------- |
+| Language        | Python 3.14+                          |
+| PDF parsing     | `pdfplumber` (word-level coordinates) |
+| Money type      | `decimal.Decimal`                     |
+| Interface       | CLI over a clean library core         |
+| Testing         | `pytest` + golden-file fixtures       |
+| Env / packaging | `uv`                                  |
+| Report output   | `rich` for colour & alignment         |
 
 We chose Python specifically for the PDF/parsing ecosystem. **Do not reach for an LLM to parse
-transactions** — extraction is deterministic and must be exact; an LLM belongs nowhere near the
-numbers.
+transactions** — extraction is deterministic and must be exact.
 
 ---
 
 ## Build, test & development commands
 
-Python 3.14+ with `uv`.
-
 ```bash
-uv sync --extra dev                 # install app + dev dependencies
-uv run wally                        # run against statements/ (auto-discovers latest)
-uv run wally --cibc <pdf> --rbc <pdf>  # explicit paths
-uv run pytest                       # run the test suite
-uv run ruff check src/ tests/       # lint
-uv run ruff format --check src/ tests/  # formatting check
-uv run pyright src/                 # type check
+uv sync --extra dev                       # install app + dev dependencies
+uv run wally                              # run (auto-discovers latest statements)
+uv run wally --cibc <pdf> --rbc <pdf>     # explicit paths
+uv run pytest                             # run the test suite
+uv run ruff check src/ tests/             # lint
+uv run ruff format --check src/ tests/    # formatting check
+uv run pyright src/                       # type check
 ```
 
 Before opening a PR: `uv run ruff check --fix src/ tests/` and `uv run ruff format src/ tests/`.
@@ -107,10 +88,8 @@ Before opening a PR: `uv run ruff check --fix src/ tests/` and `uv run ruff form
 ## Coding style
 
 Ruff defaults, 99-character line length, 4-space indentation. snake_case for modules, functions,
-and variables; PascalCase for classes. Prefer small, composable helpers over large functions —
-this matters most in the parsers, where row-stitching and x-band logic should each be testable
-units. Money-handling code stays in `Decimal` end to end (lint won't catch a stray `float` —
-reviewers must).
+and variables; PascalCase for classes. Prefer small, composable helpers over large functions.
+Money-handling code stays in `Decimal` end to end (lint won't catch a stray `float` — reviewers must).
 
 ---
 
@@ -118,9 +97,9 @@ reviewers must).
 
 ```
 src/
-  ingestion/        # load PDF, detect bank, dispatch to parser; auto-discover latest statement
+  ingestion/        # load PDF, detect bank, dispatch to parser; auto-discover latest
   parsers/
-    base.py         # frozen shared contract: Transaction, Classified, Statement, Parser ABC
+    base.py         # frozen shared contract — see src/parsers/CLAUDE.md
     cibc.py         # credit-card parser (block-delimited)
     rbc.py          # chequing parser (coordinate-based)
   reconciliation/   # the two runtime gates (abort on failure)
@@ -128,92 +107,15 @@ src/
   budget/           # category limits, aggregation, within/under/over logic
   report.py         # rich terminal renderer
   cli.py            # entry point; wires the pipeline
-statements/
-  cibc/             # drop YYYY-MM.pdf files here
-  rbc/              # drop YYYY-MM.pdf files here
+statements/         # drop YYYY-MM.pdf files here (gitignored)
 tests/
-  fixtures/         # sample statement PDFs + hand-keyed expected totals (the oracle)
-  ...               # mirrors src/
-CLAUDE.md           # this file — repo-wide conventions
-IDEAS.md            # future features backlog
+  fixtures/         # sample PDFs + hand-keyed expected totals (the oracle)
+CLAUDE.md           # this file
+IDEAS.md            # future features and Phase 3 backlog
 ```
 
-Each `src/` subdirectory has its own `CLAUDE.md` with module-specific design decisions.
-
-**Parsers are the only bank-specific code.** Everything downstream of a parsed `Statement` is
-shared and bank-agnostic.
-
----
-
-## Core data model
-
-The shared contract — defined in `src/parsers/base.py`, never redesigned by individual modules.
-
-```python
-class Direction(Enum):    WITHDRAWAL, DEPOSIT
-class Disposition(Enum):  CATEGORIZED, EXCLUDED, UNCATEGORIZED
-
-@dataclass
-class Transaction:
-    raw_description: str
-    amount: Decimal           # Decimal, never float
-    direction: Direction
-    date: date | None         # audit/ordering only
-    balance: Decimal | None   # RBC running balance; feeds Gate 1
-
-@dataclass
-class Classified:
-    txn: Transaction
-    disposition: Disposition
-    category: str | None      # set iff CATEGORIZED
-    reason: str | None        # set iff EXCLUDED
-
-@dataclass
-class Statement:
-    bank: str
-    opening_balance: Decimal | None
-    closing_balance: Decimal | None
-    transactions: list[Transaction]
-```
-
----
-
-## Build sequence
-
-Each phase's "done" is defined by a gate or the oracle — not by "looks right."
-
-- **Phase 0 — Foundations + test oracle.** Lock the data model and interfaces. Collect 2–3 real
-  statements per bank and **hand-key the expected category totals.** Nothing else starts until
-  this oracle exists.
-- **Phase 1 — CIBC vertical slice, end to end.** Build the whole pipeline on the clean parser
-  first. Validates architecture and both gates against the easy bank.
-  *Done when:* CIBC report matches hand-keyed totals and the partition gate holds.
-- **Phase 2 — RBC parser.** Drop the hard parser onto the proven pipeline.
-  *Done when:* RBC reconciles to the penny and matches hand-keyed totals.
-- **Phase 3 — Hardening.** Refund netting, multi-page statements, broader corpus.
-  *Done when:* full corpus passes both gates with zero manual intervention.
-
----
-
-## Testing
-
-```bash
-uv run pytest
-```
-
-- **Golden-file tests** per statement, keyed to hand-verified totals (the Phase-0 oracle).
-- **Reconciliation gates run at runtime** — failure aborts with a diff, not just a red test.
-- **Unit tests** for every pure, deterministic function, written in the same commit as the function.
-- Tests live under `tests/` mirroring `src/`.
-- Commit real statement fixtures with care — see [Sensitive data](#sensitive-data).
-
----
-
-## Sensitive data
-
-Statement PDFs contain full account PII. Keep them out of any public remote unless scrubbed, and
-**never send statement contents to an external API.** Personal config (`wally.toml`,
-`classification.toml`) is gitignored — commit only the `*.example.toml` templates.
+Each `src/` subdirectory and `tests/` has its own `CLAUDE.md`. The shared data model is in
+`src/parsers/base.py` — see `src/parsers/CLAUDE.md`.
 
 ---
 
@@ -285,10 +187,4 @@ Semantic Versioning (`MAJOR.MINOR.PATCH`). Currently `0.x.y` — minor versions 
 breaking changes until `1.0.0`. Bump `version` in `pyproject.toml` in the same commit that
 introduces the change.
 
----
-
-## Inputs needed from the human
-
-1. **Sample statements** — 2–3 per bank, including oddballs (multi-page, a refund, an unrecognized credit).
-2. **The CIBC-payment description string** on the RBC statement — so the exclusion rule is data, not a guess. *(Resolved: "Misc Payment CIBC CPD")*
-3. **Budget categories + monthly limits** — so the report has something to measure against.
+Sections marked `⏳ Pre-v1` are explicitly temporary constraints. Remove them when v1 ships.

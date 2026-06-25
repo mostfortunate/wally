@@ -1,8 +1,37 @@
 # Parsers
 
-`base.py` is the **frozen shared contract** — `Transaction`, `Classified`, `Statement`, `Direction`, `Disposition`, `Parser`. Do not redesign it; both parsers and everything downstream conform to it.
+`base.py` is the **frozen shared contract** — do not redesign it; both parsers and everything downstream conform to it.
 
 Parsers are the only bank-specific code. Everything downstream of a parsed `Statement` is bank-agnostic.
+
+## Core data model
+
+```python
+class Direction(Enum):    WITHDRAWAL, DEPOSIT
+class Disposition(Enum):  CATEGORIZED, EXCLUDED, UNCATEGORIZED
+
+@dataclass
+class Transaction:
+    raw_description: str
+    amount: Decimal           # Decimal, never float
+    direction: Direction
+    date: date | None         # audit/ordering only
+    balance: Decimal | None   # RBC running balance; feeds Gate 1
+
+@dataclass
+class Classified:
+    txn: Transaction
+    disposition: Disposition
+    category: str | None      # set iff CATEGORIZED
+    reason: str | None        # set iff EXCLUDED
+
+@dataclass
+class Statement:
+    bank: str
+    opening_balance: Decimal | None
+    closing_balance: Decimal | None
+    transactions: list[Transaction]
+```
 
 ---
 
