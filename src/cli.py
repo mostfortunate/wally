@@ -5,19 +5,25 @@ parser) → classify combined transactions → partition gate → aggregate → 
 A failed gate aborts with a diff and a non-zero exit; no report is emitted.
 
 Usage:
-    wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both (default use)
+    wally                                                 # auto-discover latest from statements/
+    wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both explicitly
     wally --cibc <statement.pdf>                          # CIBC only
     wally --rbc  <statement.pdf>                          # RBC only
+
+When no --cibc/--rbc flags are given, wally looks for the most recent YYYY-MM.pdf
+in statements/cibc/ and statements/rbc/ (or the directory given by --statements-dir).
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from src.budget import BudgetLimits, aggregate
 from src.budget.config import load_budget_limits
 from src.classification import ClassificationRules, classify, load_rules
+from src.ingestion.discovery import find_latest
 from src.parsers.base import Transaction
 from src.parsers.cibc import CibcParser
 from src.parsers.rbc import RbcParser
@@ -26,6 +32,7 @@ from src.report import render
 
 DEFAULT_BUDGET_CONFIG = "wally.toml"
 DEFAULT_RULES_CONFIG = "classification.toml"
+DEFAULT_STATEMENTS_DIR = "statements"
 
 
 def run(
@@ -59,7 +66,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="wally",
         description="Budget reconciliation from bank statement PDFs.",
-        epilog="At least one of --cibc or --rbc is required.",
+        epilog=(
+            "When no --cibc/--rbc flags are given, the latest YYYY-MM.pdf is "
+            "auto-discovered from <statements-dir>/cibc/ and <statements-dir>/rbc/."
+        ),
     )
     parser.add_argument("--cibc", metavar="PDF", help="path to CIBC credit card statement")
     parser.add_argument("--rbc", metavar="PDF", help="path to RBC chequing statement")
@@ -69,10 +79,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "-r", "--rules", default=DEFAULT_RULES_CONFIG, help="path to classification rules TOML"
     )
+    parser.add_argument(
+        "--statements-dir",
+        default=DEFAULT_STATEMENTS_DIR,
+        metavar="DIR",
+        help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
+    )
     args = parser.parse_args(argv)
 
     if not args.cibc and not args.rbc:
-        parser.error("at least one of --cibc or --rbc is required")
+        base = Path(args.statements_dir)
+        cibc_path = find_latest(base / "cibc")
+        rbc_path = find_latest(base / "rbc")
+        if cibc_path is None and rbc_path is None:
+            parser.error(
+                f"no statements found in {base}/ — add YYYY-MM.pdf files to "
+                f"{base}/cibc/ and {base}/rbc/"
+            )
+        if cibc_path is None:
+            parser.error(
+                f"no CIBC statement found in {base}/cibc/ — "
+                f"run `wally --cibc <path>` to include one"
+            )
+        if rbc_path is None:
+            parser.error(
+                f"no RBC statement found in {base}/rbc/ — run `wally --rbc <path>` to include one"
+            )
+        args.cibc = str(cibc_path)
+        args.rbc = str(rbc_path)
 
     limits = load_budget_limits(args.config)
     rules = load_rules(args.rules)

@@ -123,8 +123,8 @@ def test_uncategorized_warning_printed() -> None:
     out = render_to_str([], classified)
     assert "uncategorized" in out
     assert "3 uncategorized transaction(s)" in out
-    assert "$70.00" in out   # withdrawals total
-    assert "$5.00" in out    # deposits total
+    assert "$70.00" in out  # withdrawals total
+    assert "$5.00" in out  # deposits total
 
 
 def test_uncategorized_warning_withdrawal_only() -> None:
