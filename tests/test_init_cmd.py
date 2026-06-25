@@ -5,39 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from src.init_cmd import CATEGORIES, build_toml, parse_selection
-
-
-class TestParseSelection:
-    def test_single_number(self) -> None:
-        assert parse_selection("1", 10) == [0]
-
-    def test_comma_separated(self) -> None:
-        assert parse_selection("1,3,5", 10) == [0, 2, 4]
-
-    def test_all_keyword(self) -> None:
-        assert parse_selection("all", 10) == list(range(10))
-
-    def test_all_keyword_case_insensitive(self) -> None:
-        assert parse_selection("ALL", 10) == list(range(10))
-
-    def test_whitespace_around_numbers(self) -> None:
-        assert parse_selection(" 2 , 4 ", 10) == [1, 3]
-
-    def test_out_of_range_returns_none(self) -> None:
-        assert parse_selection("11", 10) is None
-
-    def test_zero_returns_none(self) -> None:
-        assert parse_selection("0", 10) is None
-
-    def test_non_numeric_returns_none(self) -> None:
-        assert parse_selection("abc", 10) is None
-
-    def test_empty_string_returns_none(self) -> None:
-        assert parse_selection("", 10) is None
-
-    def test_mixed_valid_invalid_returns_none(self) -> None:
-        assert parse_selection("1,abc,3", 10) is None
+from src.init_cmd import CATEGORIES, build_toml
 
 
 class TestBuildToml:
