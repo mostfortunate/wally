@@ -1,10 +1,8 @@
 """Interactive wizard for `wally init` — scaffolds wally.toml.
 
-Presents all categories in a navigable form (prompt_toolkit Application),
+Presents all categories in a compact navigable form (prompt_toolkit),
 collects an optional monthly limit for each, and writes wally.toml.
-Empty field = category ignored. 0 = tracked with no cap. Any positive
-number = tracked with that budget. Aborts non-destructively if the file
-already exists and the user declines to overwrite.
+Empty field = category ignored. 0 = tracked with no cap.
 """
 
 from __future__ import annotations
@@ -19,6 +17,7 @@ from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.processors import Processor, Transformation, TransformationInput
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.prompt import Confirm
@@ -37,13 +36,21 @@ CATEGORIES: list[tuple[str, str]] = [
     ("services", "Services"),
 ]
 
-_LABEL_WIDTH = 18
-_INPUT_WIDTH = 20
 _HINT = "↑↓ navigate · empty to skip · 0 = track no cap · Ctrl+D confirm · Ctrl+C cancel"
+_INPUT_WIDTH = 12
+
+
+class _ZeroPlaceholder(Processor):
+    """Show a grey '0' when the buffer is empty (placeholder hint)."""
+
+    def apply_transformation(self, transformation_input: TransformationInput) -> Transformation:
+        if not transformation_input.buffer_control.buffer.text:
+            return Transformation([("class:placeholder", "0")])
+        return Transformation(transformation_input.fragments)
 
 
 def _run_category_form() -> dict[str, Decimal] | None:
-    """Inline navigable form — returns key→Decimal for confirmed categories, or None on abort."""
+    """Compact inline form — returns key→Decimal for confirmed categories, or None on abort."""
     buffers = [Buffer(name=key, multiline=False) for key, _ in CATEGORIES]
     status: list[str] = [""]  # mutable slot shared across closures
 
@@ -82,7 +89,7 @@ def _run_category_form() -> dict[str, Decimal] | None:
             except InvalidOperation:
                 if first_bad is None:
                     first_bad = buf
-                    status[0] = f"Invalid value for {label}: enter a number ≥ 0 or leave empty"
+                    status[0] = f"Invalid: {label} must be a number ≥ 0 or left empty"
         if first_bad is not None:
             event.app.layout.focus(first_bad)
             event.app.invalidate()
@@ -95,23 +102,45 @@ def _run_category_form() -> dict[str, Decimal] | None:
     def abort(event: KeyPressEvent) -> None:
         event.app.exit(result=None)
 
-    def make_row(buf: Buffer, label: str) -> VSplit:
-        def get_label() -> StyleAndTextTuples:
+    def make_label(buf: Buffer, label: str) -> FormattedTextControl:
+        def get() -> StyleAndTextTuples:
             try:
                 focused = get_app().layout.current_buffer is buf
             except Exception:
                 focused = False
-            style = "class:focused" if focused else ""
-            return [(style, label.ljust(_LABEL_WIDTH))]
+            style = "class:label-focused" if focused else "class:label"
+            return [(style, f"{label}: ")]
 
+        return FormattedTextControl(get)
+
+    def make_row(buf: Buffer, label: str) -> VSplit:
         return VSplit(
             [
-                Window(content=FormattedTextControl(get_label), width=_LABEL_WIDTH),
-                Window(content=FormattedTextControl(" │ "), width=3),
-                Window(content=BufferControl(buffer=buf, focusable=True), width=_INPUT_WIDTH),
-                Window(content=FormattedTextControl(" │"), width=2),
+                Window(content=make_label(buf, label), dont_extend_width=True, height=1),
+                Window(
+                    content=BufferControl(
+                        buffer=buf,
+                        focusable=True,
+                        input_processors=[_ZeroPlaceholder()],
+                    ),
+                    width=_INPUT_WIDTH,
+                    height=1,
+                ),
             ]
         )
+
+    def get_total() -> StyleAndTextTuples:
+        total = Decimal(0)
+        for buf in buffers:
+            raw = buf.text.strip()
+            if raw:
+                try:
+                    val = Decimal(raw.lstrip("$").replace(",", ""))
+                    if val >= 0:
+                        total += val
+                except InvalidOperation:
+                    pass
+        return [("class:total", f"Total Budget: ${total:,.2f}")]
 
     def get_status() -> StyleAndTextTuples:
         msg = status[0]
@@ -120,11 +149,12 @@ def _run_category_form() -> dict[str, Decimal] | None:
     layout = Layout(
         HSplit(
             [
-                Window(content=FormattedTextControl("Budget limits\n"), height=1),
+                Window(content=FormattedTextControl("Configure your budget"), height=1),
                 *[
                     make_row(buf, label)
                     for buf, (_, label) in zip(buffers, CATEGORIES, strict=True)
                 ],
+                Window(content=FormattedTextControl(get_total), height=1),
                 Window(content=FormattedTextControl(get_status), height=1),
             ]
         ),
@@ -132,9 +162,12 @@ def _run_category_form() -> dict[str, Decimal] | None:
     )
     style = Style.from_dict(
         {
-            "focused": "bold reverse",
+            "placeholder": "fg:ansibrightblack",
+            "label": "",
+            "label-focused": "bold",
             "error": "fg:ansired bold",
             "hint": "fg:ansigreen",
+            "total": "bold",
         }
     )
     app: Application[dict[str, Decimal] | None] = Application(
