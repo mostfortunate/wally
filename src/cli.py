@@ -144,6 +144,11 @@ def main(argv: list[str] | None = None) -> int:
         args.cibc = str(cibc_path)
         args.rbc = str(rbc_path)
 
+    if not Path(args.config).exists():
+        parser.error(f"{args.config} not found — run `wally init` to set up your budget config")
+    if not Path(args.rules).exists():
+        parser.error(f"{args.rules} not found — create a classification rules file")
+
     limits = load_budget_limits(args.config)
     rules = load_rules(args.rules)
     period = _period_label(args.cibc, args.rbc)
