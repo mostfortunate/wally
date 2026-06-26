@@ -41,10 +41,11 @@ from src.parsers.rbc import RbcParser
 
 _console = Console()
 
-_FORM_HINT = "↑↓ navigate · Tab/Enter next · Ctrl+D save · Ctrl+C cancel"
+_FORM_HINT = "1-0 shortcut · type to search · ↑↓/Tab next · Ctrl+D save · Ctrl+C cancel"
 _DESC_WIDTH = 40
 _AMOUNT_WIDTH = 10
 _INPUT_WIDTH = 22
+_DIGIT_ORDER = list(range(1, 10)) + [0]  # 1-9 then 0 = 10 slots
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +169,10 @@ def _run_annotate_form(
     Empty fields are silently skipped (merchant will reappear on next run).
     """
     category_names = sorted(rules.categories.keys())
+    # Digit shortcuts: 1-9 then 0, mapped to first 10 sorted categories
+    shortcuts: dict[str, str] = {
+        str(_DIGIT_ORDER[i]): cat for i, cat in enumerate(category_names[:10])
+    }
     completer = WordCompleter(category_names, ignore_case=True, sentence=True)
 
     buffers: list[Buffer] = []
@@ -185,6 +190,15 @@ def _run_annotate_form(
         )
 
     kb = KeyBindings()
+
+    # Digit shortcuts — eager so they take priority over buffer character input
+    for _key, _cat in shortcuts.items():
+
+        @kb.add(_key, eager=True)
+        def _assign(event: KeyPressEvent, _bound: str = _cat) -> None:
+            cur = event.app.layout.current_buffer
+            if cur is not None:
+                cur.set_document(Document(_bound))
 
     @kb.add("down")
     @kb.add("tab")
@@ -227,6 +241,18 @@ def _run_annotate_form(
     def abort(event: KeyPressEvent) -> None:
         event.app.exit(result=None)
 
+    def get_legend() -> StyleAndTextTuples:
+        if not shortcuts:
+            return [("class:dim", "  (no categories yet — type a name to create one)")]
+        parts: StyleAndTextTuples = []
+        items = list(shortcuts.items())
+        for idx, (key_str, cat) in enumerate(items):
+            if idx == 5:
+                parts.append(("", "\n"))
+            parts.append(("class:shortcut-key", f"  {key_str}"))
+            parts.append(("", f" {cat}"))
+        return parts
+
     def make_label(buf: Buffer, txn: Transaction) -> FormattedTextControl:
         desc = txn.raw_description[:_DESC_WIDTH]
         sign = "+" if txn.direction.name == "DEPOSIT" else ""
@@ -259,6 +285,8 @@ def _run_annotate_form(
         msg = f"{assigned}/{len(queue)} assigned  ·  {_FORM_HINT}"
         return [("class:hint", msg)]
 
+    legend_height = 2 if len(shortcuts) > 5 else 1
+
     layout = Layout(
         HSplit(
             [
@@ -268,6 +296,7 @@ def _run_annotate_form(
                     ),
                     height=1,
                 ),
+                Window(content=FormattedTextControl(get_legend), height=legend_height),
                 Window(height=1),
                 *[make_row(buf, txn) for buf, txn in zip(buffers, queue, strict=True)],
                 Window(height=1),
@@ -281,6 +310,8 @@ def _run_annotate_form(
         {
             "label": "",
             "label-focused": "bold",
+            "shortcut-key": "bold fg:ansicyan",
+            "dim": "fg:ansibrightblack",
             "hint": "fg:ansigreen",
         }
     )
