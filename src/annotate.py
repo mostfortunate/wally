@@ -1,11 +1,12 @@
 """Rule-harvesting annotator for wally.
 
-`wally annotate` finds UNCATEGORIZED transactions across parsed statements, deduplicates
-them by normalized description, and presents a keyboard-driven menu so the user can label
-each unique merchant — writing patterns directly to classification.toml as production config.
+`wally annotate` finds UNCATEGORIZED transactions across parsed statements,
+deduplicates by normalized description, and presents an all-at-once form where
+the user can assign each unique merchant to a category. On Ctrl+D, patterns are
+written to classification.toml as production config.
 
-`wally annotate list` shows a summary table of every statement and how many transactions
-remain uncategorized, without entering interactive mode.
+`wally annotate list` shows a summary table of every statement and how many
+transactions remain uncategorized, without entering interactive mode.
 """
 
 from __future__ import annotations
@@ -13,12 +14,20 @@ from __future__ import annotations
 import json
 import re
 import sys
-import termios
 import tomllib
-import tty
 from pathlib import Path
 
 import tomli_w
+from prompt_toolkit import Application
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, VSplit, Window
+from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.styles import Style
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -31,6 +40,12 @@ from src.parsers.cibc import CibcParser
 from src.parsers.rbc import RbcParser
 
 _console = Console()
+
+_FORM_HINT = "1-0 shortcut · type to search · ↑↓/Tab next · Ctrl+D save · Ctrl+C cancel"
+_DESC_WIDTH = 40
+_AMOUNT_WIDTH = 10
+_INPUT_WIDTH = 22
+_DIGIT_ORDER = list(range(1, 10)) + [0]  # 1-9 then 0 = 10 slots
 
 
 # ---------------------------------------------------------------------------
@@ -104,15 +119,29 @@ def _unique_uncategorized(classified: list[Classified]) -> list[Transaction]:
     return result
 
 
-def _build_menu(rules: ClassificationRules) -> dict[int, str]:
-    """Build stable int->category mapping. Sorted alphabetically, keys 1-0 (10 slots)."""
-    keys = list(range(1, 10)) + [0]  # 1-9 then 0 = 10 slots
-    cats = sorted(rules.categories.keys())
-    return {keys[i]: cat for i, cat in enumerate(cats) if i < len(keys)}
+def _all_unique_with_category(
+    classified: list[Classified],
+) -> list[tuple[Transaction, str | None]]:
+    """Return (txn, current_category) for every unique merchant, EXCLUDED skipped.
+
+    CATEGORIZED rows carry their assigned category; UNCATEGORIZED rows carry None.
+    Uniqueness key is the same _default_pattern used elsewhere.
+    """
+    seen: set[str] = set()
+    result: list[tuple[Transaction, str | None]] = []
+    for c in classified:
+        if c.disposition is Disposition.EXCLUDED:
+            continue
+        key = _default_pattern(normalize(c.txn.raw_description))
+        if key not in seen:
+            seen.add(key)
+            cat = c.category if c.disposition is Disposition.CATEGORIZED else None
+            result.append((c.txn, cat))
+    return result
 
 
 # ---------------------------------------------------------------------------
-# Session file helpers
+# Session file helpers (kept for backward compatibility; tested in test_annotate.py)
 # ---------------------------------------------------------------------------
 
 _SESSION_VERSION = 1
@@ -147,119 +176,174 @@ def _delete_session(session_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Terminal I/O
+# Interactive form (prompt_toolkit)
 # ---------------------------------------------------------------------------
 
 
-def _read_key() -> str:
-    """Read a single keypress from stdin in raw mode. Enter returns '\\r'."""
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    return ch
-
-
-def _format_direction(txn: Transaction) -> str:
-    return txn.direction.name
-
-
-def _format_bank_category(txn: Transaction) -> str:
-    if txn.bank_category:
-        return f"  CIBC: {txn.bank_category}"
-    return ""
-
-
-def _print_menu(menu: dict[int, str]) -> None:
-    slots: list[str] = []
-    for key in list(range(1, 10)) + [0]:
-        if key in menu:
-            slots.append(f"  [bold]{key}[/bold] {menu[key]}")
-    _console.print("  " + "   ".join(slots))
-
-
-def _prompt_loop(
-    txn: Transaction,
-    menu: dict[int, str],
+def _run_annotate_form(
+    queue: list[tuple[Transaction, str | None]],
     rules: ClassificationRules,
-    done: int,
-    total: int,
-) -> str | None:
-    """Interactively prompt for a category. Returns category string or None (skip)."""
-    norm = normalize(txn.raw_description)
-    guess = _guess_category(norm, rules)
+) -> dict[int, str] | None:
+    """All-at-once assignment form.
 
-    _console.print()
-    _console.print(
-        f"[bold][{done + 1}/{total}][/bold] {txn.raw_description:<40} "
-        f"[green]${txn.amount}[/green]  {_format_direction(txn)}"
-        f"{_format_bank_category(txn)}"
+    queue is a list of (transaction, prefill_category) — prefill_category is the current
+    classification or None when unknown.  Returns {queue_index: category_name} for every
+    confirmed non-empty field, or None if aborted.
+    """
+    category_names = sorted(rules.categories.keys())
+    # Digit shortcuts: 1-9 then 0, mapped to first 10 sorted categories
+    shortcuts: dict[str, str] = {
+        str(_DIGIT_ORDER[i]): cat for i, cat in enumerate(category_names[:10])
+    }
+    completer = WordCompleter(category_names, ignore_case=True, sentence=True)
+
+    buffers: list[Buffer] = []
+    for i, (txn, prefill) in enumerate(queue):
+        # Use current category, fall back to guess from pattern matching
+        text = prefill or _guess_category(normalize(txn.raw_description), rules) or ""
+        doc = Document(text)
+        buffers.append(
+            Buffer(
+                name=f"txn_{i}",
+                document=doc,
+                completer=completer,
+                complete_while_typing=True,
+                multiline=False,
+            )
+        )
+
+    kb = KeyBindings()
+
+    # Digit shortcuts — eager so they take priority over buffer character input
+    for _key, _cat in shortcuts.items():
+
+        @kb.add(_key, eager=True)
+        def _assign(event: KeyPressEvent, _bound: str = _cat) -> None:
+            cur = event.app.layout.current_buffer
+            if cur is not None:
+                cur.set_document(Document(_bound))
+
+    @kb.add("down")
+    @kb.add("tab")
+    def move_next(event: KeyPressEvent) -> None:
+        cur = event.app.layout.current_buffer
+        for i, buf in enumerate(buffers):
+            if buf is cur:
+                event.app.layout.focus(buffers[(i + 1) % len(buffers)])
+                return
+
+    @kb.add("up")
+    def move_prev(event: KeyPressEvent) -> None:
+        cur = event.app.layout.current_buffer
+        for i, buf in enumerate(buffers):
+            if buf is cur:
+                event.app.layout.focus(buffers[(i - 1) % len(buffers)])
+                return
+
+    @kb.add("enter")
+    def enter_or_next(event: KeyPressEvent) -> None:
+        cur = event.app.layout.current_buffer
+        if cur is None:
+            return
+        cs = cur.complete_state
+        if cs and cs.current_completion:
+            cur.apply_completion(cs.current_completion)
+            return
+        for i, buf in enumerate(buffers):
+            if buf is cur:
+                event.app.layout.focus(buffers[(i + 1) % len(buffers)])
+                return
+
+    @kb.add("c-d")
+    def confirm(event: KeyPressEvent) -> None:
+        result = {i: buf.text.strip().lower() for i, buf in enumerate(buffers) if buf.text.strip()}
+        event.app.exit(result=result)
+
+    @kb.add("c-c")
+    @kb.add("escape")
+    def abort(event: KeyPressEvent) -> None:
+        event.app.exit(result=None)
+
+    def get_legend() -> StyleAndTextTuples:
+        if not shortcuts:
+            return [("class:dim", "  (no categories yet — type a name to create one)")]
+        parts: StyleAndTextTuples = []
+        items = list(shortcuts.items())
+        for idx, (key_str, cat) in enumerate(items):
+            if idx == 5:
+                parts.append(("", "\n"))
+            parts.append(("class:shortcut-key", f"  {key_str}"))
+            parts.append(("", f" {cat}"))
+        return parts
+
+    def make_label(buf: Buffer, txn: Transaction) -> FormattedTextControl:
+        desc = txn.raw_description[:_DESC_WIDTH]
+        sign = "+" if txn.direction.name == "DEPOSIT" else ""
+        amount_str = f"{sign}${txn.amount}"
+
+        def get() -> StyleAndTextTuples:
+            try:
+                focused = get_app().layout.current_buffer is buf
+            except Exception:
+                focused = False
+            label = f"  {desc:<{_DESC_WIDTH}}  {amount_str:>{_AMOUNT_WIDTH}}  "
+            return [("class:label-focused" if focused else "class:label", label)]
+
+        return FormattedTextControl(get)
+
+    def make_row(buf: Buffer, txn: Transaction) -> VSplit:
+        return VSplit(
+            [
+                Window(content=make_label(buf, txn), dont_extend_width=True, height=1),
+                Window(
+                    content=BufferControl(buffer=buf, focusable=True),
+                    width=_INPUT_WIDTH,
+                    height=1,
+                ),
+            ]
+        )
+
+    legend_height = 2 if len(shortcuts) > 5 else 1
+
+    layout = Layout(
+        HSplit(
+            [
+                Window(
+                    content=FormattedTextControl(f"Assign categories — {len(queue)} merchants"),
+                    height=1,
+                ),
+                Window(content=FormattedTextControl(get_legend), height=legend_height),
+                Window(height=1),
+                *[make_row(buf, txn) for buf, (txn, _) in zip(buffers, queue, strict=True)],
+                Window(height=1),
+                Window(
+                    content=FormattedTextControl("  Ctrl+D save  ·  Ctrl+C cancel"),
+                    height=1,
+                ),
+            ]
+        ),
+        focused_element=buffers[0],
     )
 
-    if guess:
-        _console.print(f"  Guess: [bold cyan]↵ {guess}[/bold cyan]")
-    else:
-        _console.print("  Guess: [dim](none)[/dim]")
-
-    _console.print()
-    _print_menu(menu)
-    _console.print()
-
-    while True:
-        _console.print("  [bold]>[/bold] ", end="")
-        sys.stdout.flush()
-        key = _read_key()
-
-        # Ctrl-C
-        if key == "\x03":
-            raise KeyboardInterrupt
-
-        # Enter — accept guess
-        if key == "\r":
-            if guess:
-                _console.print(f"{guess}")
-                return guess
-            _console.print("[dim](no guess — skipped)[/dim]")
-            return None
-
-        # Digit keys
-        if key.isdigit():
-            digit = int(key)
-            if digit in menu:
-                _console.print(menu[digit])
-                return menu[digit]
-            _console.print(f"[yellow]No category at slot {key}[/yellow]")
-            continue
-
-        # n — new category
-        if key == "n":
-            _console.print()
-            name = input("  New category name: ").strip().lower()
-            if name:
-                return name
-            _console.print("[yellow]Empty name — skipped.[/yellow]")
-            return None
-
-        # s — skip
-        if key == "s":
-            _console.print("[dim]skipped[/dim]")
-            return None
-
-        # Unknown key
-        _console.print(f"[dim](unknown key '{key}' — try 1-9, 0, n, s, or ↵)[/dim]")
-
-
-def _print_summary(assigned: int, misc: int, skipped: int) -> None:
-    _console.print()
-    _console.print(
-        f"[bold]Done.[/bold]  "
-        f"assigned [green]{assigned}[/green]  "
-        f"misc [yellow]{misc}[/yellow]  "
-        f"skipped [dim]{skipped}[/dim]"
+    style = Style.from_dict(
+        {
+            "label": "",
+            "label-focused": "bold",
+            "shortcut-key": "bold fg:ansicyan",
+            "dim": "fg:ansibrightblack",
+            "hint": "fg:ansigreen",
+        }
     )
+
+    app: Application[dict[int, str] | None] = Application(
+        layout=layout,
+        key_bindings=kb,
+        style=style,
+        full_screen=False,
+        erase_when_done=False,
+        mouse_support=False,
+    )
+    return app.run()
 
 
 # ---------------------------------------------------------------------------
@@ -304,46 +388,31 @@ def run_annotate(
 
     rules = load_rules(rp) if rp.exists() else ClassificationRules(categories={}, exclusions={})
     classified = classify(transactions, rules)
-    unique = _unique_uncategorized(classified)
-
-    session_path = rp.with_name(rp.name + ".session.json")
-    handled = _load_session(session_path)
-    queue = [t for t in unique if normalize(t.raw_description) not in handled]
-
-    total = len(unique)
-    done = total - len(queue)
+    queue = _all_unique_with_category(classified)
 
     if not queue:
-        print(f"Nothing left to annotate ({total} merchants already labeled).")
-        _delete_session(session_path)
+        print("No transactions found.")
         return 0
 
-    menu = _build_menu(rules)
-    misc_count = skip_count = assigned_count = 0
+    assignments = _run_annotate_form(queue, rules)
 
-    try:
-        for txn in queue:
-            category = _prompt_loop(txn, menu, rules, done, total)
-            if category is None:
-                skip_count += 1
-            else:
-                category = category.strip().lower()
-                pattern = _default_pattern(normalize(txn.raw_description))
-                _append_rule(rp, category, pattern)
-                rules = load_rules(rp)  # reload so autofill improves in-session
-                menu = _build_menu(rules)  # rebuild menu if new category was added
-                if category == "miscellaneous":
-                    misc_count += 1
-                else:
-                    assigned_count += 1
-            _save_session(session_path, normalize(txn.raw_description))
-            done += 1
-    except KeyboardInterrupt:
-        print("\nInterrupted — progress saved.")
+    if assignments is None:
+        _console.print("\nCancelled — no changes saved.")
+        return 0
 
-    _print_summary(assigned_count, misc_count, skip_count)
-    if done >= total:
-        _delete_session(session_path)
+    if not assignments:
+        _console.print("\nNo categories assigned.")
+        return 0
+
+    for idx, category in assignments.items():
+        txn, _ = queue[idx]
+        pattern = _default_pattern(normalize(txn.raw_description))
+        _append_rule(rp, category, pattern)
+
+    count = len(assignments)
+    _console.print(
+        f"\n[bold]Done.[/bold] Wrote [green]{count}[/green] rule(s) to [bold]{rp}[/bold]."
+    )
     return 0
 
 
@@ -420,13 +489,12 @@ def run_annotate_list(
 
 
 __all__ = [
+    "_all_unique_with_category",
     "_append_rule",
-    "_build_menu",
     "_default_pattern",
     "_delete_session",
     "_guess_category",
     "_load_session",
-    "_read_key",
     "_save_session",
     "_unique_uncategorized",
     "run_annotate",
