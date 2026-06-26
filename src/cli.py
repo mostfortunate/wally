@@ -37,6 +37,21 @@ from src.reconciliation import ReconciliationError, check_balance, check_partiti
 from src.report import render
 
 
+def _resolve_pdf_path(value: str, bank_dir: Path) -> str:
+    """Accept a full path or a bare YYYY-MM stem.
+
+    If value is an existing file, return it as-is.
+    If not, try bank_dir / f"{value}.pdf".
+    Otherwise raise argparse.ArgumentTypeError.
+    """
+    if Path(value).exists():
+        return value
+    candidate = bank_dir / f"{value}.pdf"
+    if candidate.exists():
+        return str(candidate)
+    raise argparse.ArgumentTypeError(f"cannot find PDF {value!r} — tried {candidate}")
+
+
 def _period_label(cibc_path: str | None, rbc_path: str | None) -> str | None:
     """Format a human-readable period from YYYY-MM PDF filenames, or None if unavailable."""
     months: set[str] = set()
@@ -143,9 +158,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Cleared {n} cached statement parse(s).")
         return 0
 
+    base = Path(args.statements_dir)
+    if args.cibc:
+        try:
+            args.cibc = _resolve_pdf_path(args.cibc, base / "cibc")
+        except argparse.ArgumentTypeError as e:
+            parser.error(str(e))
+    if args.rbc:
+        try:
+            args.rbc = _resolve_pdf_path(args.rbc, base / "rbc")
+        except argparse.ArgumentTypeError as e:
+            parser.error(str(e))
+
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
-        base = Path(args.statements_dir)
         cibc_path = find_latest(base / "cibc")
         rbc_path = find_latest(base / "rbc")
         if cibc_path is None and rbc_path is None:

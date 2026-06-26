@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from src.cli import _period_label
+import argparse
+from pathlib import Path
+
+import pytest
+
+from src.cli import _period_label, _resolve_pdf_path
 
 
 class TestPeriodLabel:
@@ -25,3 +30,22 @@ class TestPeriodLabel:
 
     def test_ignores_non_yyyy_mm_stem(self) -> None:
         assert _period_label("statements/cibc/2026-06.pdf", "other/statement.pdf") == "June 2026"
+
+
+class TestResolvePdfPath:
+    def test_full_path_that_exists_is_returned_as_is(self, tmp_path: Path) -> None:
+        pdf = tmp_path / "2026-06.pdf"
+        pdf.touch()
+        assert _resolve_pdf_path(str(pdf), tmp_path / "cibc") == str(pdf)
+
+    def test_date_stem_resolves_to_bank_dir_pdf(self, tmp_path: Path) -> None:
+        bank_dir = tmp_path / "cibc"
+        bank_dir.mkdir()
+        (bank_dir / "2026-06.pdf").touch()
+        assert _resolve_pdf_path("2026-06", bank_dir) == str(bank_dir / "2026-06.pdf")
+
+    def test_raises_when_neither_path_nor_stem_resolves(self, tmp_path: Path) -> None:
+        bank_dir = tmp_path / "cibc"
+        bank_dir.mkdir()
+        with pytest.raises(argparse.ArgumentTypeError, match="cannot find PDF"):
+            _resolve_pdf_path("2026-06", bank_dir)
