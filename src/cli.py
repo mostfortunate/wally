@@ -41,21 +41,6 @@ from src.reconciliation import ReconciliationError, check_balance, check_partiti
 from src.report import render
 
 
-def _resolve_pdf_path(value: str, bank_dir: Path) -> str:
-    """Accept a full path or a bare YYYY-MM stem.
-
-    If value is an existing file, return it as-is.
-    If not, try bank_dir / f"{value}.pdf".
-    Otherwise raise argparse.ArgumentTypeError.
-    """
-    if Path(value).exists():
-        return value
-    candidate = bank_dir / f"{value}.pdf"
-    if candidate.exists():
-        return str(candidate)
-    raise argparse.ArgumentTypeError(f"cannot find PDF {value!r} — tried {candidate}")
-
-
 def _period_label(cibc_path: str | None, rbc_path: str | None) -> str | None:
     """Format a human-readable period from YYYY-MM PDF filenames, or None if unavailable."""
     months: set[str] = set()
