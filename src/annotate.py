@@ -132,12 +132,12 @@ def _load_session(session_path: Path) -> set[str]:
 
 
 def _save_session(session_path: Path, normalized_desc: str) -> None:
-    """Append one normalized description to session file."""
+    """Append one normalized description to session file. Atomic write via tmp + rename."""
     handled = _load_session(session_path)
     handled.add(normalized_desc)
-    session_path.write_text(
-        json.dumps({"session_version": _SESSION_VERSION, "handled": sorted(handled)})
-    )
+    tmp = session_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"session_version": _SESSION_VERSION, "handled": sorted(handled)}))
+    tmp.replace(session_path)
 
 
 def _delete_session(session_path: Path) -> None:
