@@ -177,8 +177,16 @@ def _print_menu(menu: dict[int, str]) -> None:
     slots: list[str] = []
     for key in list(range(1, 10)) + [0]:
         if key in menu:
-            slots.append(f"  [bold]{key}[/bold] {menu[key]}")
-    _console.print("  " + "   ".join(slots))
+            slots.append(f"[bold]{key}[/bold] {menu[key]}")
+    if slots:
+        _console.print("  " + "   ".join(slots))
+    _console.print(
+        "  [dim]n[/dim] new category   "
+        "[dim]m[/dim] misc   "
+        "[dim]s[/dim] skip   "
+        "[dim]↵[/dim] accept guess   "
+        "[dim]Ctrl+C[/dim] quit"
+    )
 
 
 def _prompt_loop(
@@ -243,13 +251,18 @@ def _prompt_loop(
             _console.print("[yellow]Empty name — skipped.[/yellow]")
             return None
 
+        # m — miscellaneous shortcut
+        if key == "m":
+            _console.print("miscellaneous")
+            return "miscellaneous"
+
         # s — skip
         if key == "s":
             _console.print("[dim]skipped[/dim]")
             return None
 
         # Unknown key
-        _console.print(f"[dim](unknown key '{key}' — try 1-9, 0, n, s, or ↵)[/dim]")
+        _console.print(f"[dim](unknown key '{key}' — try 1-9, 0, n, m, s, or ↵)[/dim]")
 
 
 def _print_summary(assigned: int, misc: int, skipped: int) -> None:
@@ -303,6 +316,12 @@ def run_annotate(
         return 0
 
     rules = load_rules(rp) if rp.exists() else ClassificationRules(categories={}, exclusions={})
+    if not rules.categories:
+        _console.print(
+            f"[yellow]No categories found in {rp}. "
+            "Press [bold]n[/bold] to create categories as you go "
+            "or [bold]m[/bold] for miscellaneous.[/yellow]"
+        )
     classified = classify(transactions, rules)
     unique = _unique_uncategorized(classified)
 
