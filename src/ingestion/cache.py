@@ -100,5 +100,7 @@ def _txn_from_json(data: dict[str, object]) -> Transaction:
         direction=Direction[str(data["direction"])],
         date=date.fromisoformat(str(raw_date)) if raw_date is not None else None,
         balance=Decimal(str(raw_balance)) if raw_balance is not None else None,
-        bank_category=str(data["bank_category"]) if data.get("bank_category") is not None else None,
+        bank_category=str(data["bank_category"])
+        if data.get("bank_category") is not None
+        else None,
     )

@@ -96,7 +96,7 @@ class TestDefaultPattern:
         assert _default_pattern("timhortons#2813") == "timhortons"
 
     def test_default_pattern_strips_suffix_digits(self) -> None:
-        """'amazonby8ue6y60' -> 'amazonby' (letters-only prefix before first digit in trimmed stem)"""
+        """'amazonby8ue6y60' -> 'amazonby': letters-only prefix before first digit."""
         assert _default_pattern("amazonby8ue6y60") == "amazonby"
 
     def test_default_pattern_short_merchant(self) -> None:
