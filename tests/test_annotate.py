@@ -7,21 +7,19 @@ from __future__ import annotations
 
 import tomllib
 from decimal import Decimal
-from io import StringIO
 from pathlib import Path
 
 import pytest
-from rich.console import Console as RichConsole
 
 from src.annotate import (
     _append_rule,
+    _build_list_rows,
     _default_pattern,
     _delete_session,
     _guess_category,
     _load_session,
     _save_session,
     _unique_uncategorized,
-    run_annotate_list,
 )
 from src.classification.config import ClassificationRules
 from src.parsers.base import Classified, Direction, Disposition, Statement, Transaction
@@ -209,13 +207,16 @@ class TestUniqueUncategorized:
 
 
 # ---------------------------------------------------------------------------
-# run_annotate_list tests (monkeypatched cached_parse)
+# _build_list_rows tests (monkeypatched cached_parse)
+#
+# run_annotate_list delegates data computation to _build_list_rows before
+# entering the interactive picker.  These tests exercise that pure data layer.
 # ---------------------------------------------------------------------------
 
 
-class TestRunAnnotateList:
-    def test_list_all_categorized(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """All CATEGORIZED transactions -> Done column shows 0 uncategorized."""
+class TestBuildListRows:
+    def test_all_categorized(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """All CATEGORIZED transactions -> row reports 0 uncategorized and is_done=True."""
         rules_path = tmp_path / "classification.toml"
         _append_rule(rules_path, "coffee", "timhortons")
 
@@ -228,24 +229,21 @@ class TestRunAnnotateList:
 
         monkeypatch.setattr(annotate_mod, "cached_parse", lambda path, parser: stmt)
 
-        buf = StringIO()
-        monkeypatch.setattr(annotate_mod, "_console", RichConsole(file=buf, highlight=False))
+        from src.classification import load_rules
 
-        result = run_annotate_list(
-            rules_path=str(rules_path),
-            cibc_paths=[str(cibc_pdf)],
-        )
-        assert result == 0
-        output = buf.getvalue()
-        # 0 uncategorized transactions
-        assert "0" in output
+        rules = load_rules(rules_path)
+        rows = _build_list_rows([("CIBC", str(cibc_pdf))], rules)
 
-    def test_list_some_uncategorized(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Mixed dispositions -> correct uncategorized count in output."""
+        assert len(rows) == 1
+        filename, bank, n_total, n_unc, is_done = rows[0]
+        assert filename == "2026-01.pdf"
+        assert bank == "CIBC"
+        assert n_total == 1
+        assert n_unc == 0
+        assert is_done is True
+
+    def test_some_uncategorized(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Mixed dispositions -> row reports correct uncategorized count and is_done=False."""
         rules_path = tmp_path / "classification.toml"
         _append_rule(rules_path, "coffee", "timhortons")
 
@@ -264,14 +262,13 @@ class TestRunAnnotateList:
 
         monkeypatch.setattr(annotate_mod, "cached_parse", lambda path, parser: stmt)
 
-        buf = StringIO()
-        monkeypatch.setattr(annotate_mod, "_console", RichConsole(file=buf, highlight=False))
+        from src.classification import load_rules
 
-        result = run_annotate_list(
-            rules_path=str(rules_path),
-            cibc_paths=[str(cibc_pdf)],
-        )
-        assert result == 0
-        output = buf.getvalue()
-        # Should show 1 uncategorized transaction in the table
-        assert "1" in output
+        rules = load_rules(rules_path)
+        rows = _build_list_rows([("CIBC", str(cibc_pdf))], rules)
+
+        assert len(rows) == 1
+        _, _, n_total, n_unc, is_done = rows[0]
+        assert n_total == 2
+        assert n_unc == 1
+        assert is_done is False
