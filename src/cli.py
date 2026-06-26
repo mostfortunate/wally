@@ -160,15 +160,9 @@ def main(argv: list[str] | None = None) -> int:
 
     base = Path(args.statements_dir)
     if args.cibc:
-        try:
-            args.cibc = _resolve_pdf_path(args.cibc, base / "cibc")
-        except argparse.ArgumentTypeError as e:
-            parser.error(str(e))
+        args.cibc = _resolve_pdf_path(args.cibc, base / "cibc")
     if args.rbc:
-        try:
-            args.rbc = _resolve_pdf_path(args.rbc, base / "rbc")
-        except argparse.ArgumentTypeError as e:
-            parser.error(str(e))
+        args.rbc = _resolve_pdf_path(args.rbc, base / "rbc")
 
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
