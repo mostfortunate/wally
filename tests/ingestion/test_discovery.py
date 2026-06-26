@@ -1,10 +1,10 @@
-"""Unit tests for src.ingestion.discovery.find_latest."""
+"""Unit tests for src.ingestion.discovery.find_latest and find_all."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from src.ingestion.discovery import find_latest
+from src.ingestion.discovery import find_all, find_latest
 
 
 class TestFindLatest:
@@ -67,3 +67,22 @@ class TestFindLatest:
         (bank_dir / "2026-01.pdf").touch()
         (bank_dir / "2026-02.pdf").touch()
         assert find_latest(bank_dir) == bank_dir / "2026-02.pdf"
+
+
+class TestFindAll:
+    def test_find_all_returns_sorted_pdfs(self, tmp_path: Path) -> None:
+        """find_all returns YYYY-MM.pdf files sorted; ignores non-matching names."""
+        for name in ["2026-03.pdf", "2026-01.pdf", "2026-02.pdf", "notes.txt", "random.pdf"]:
+            (tmp_path / name).touch()
+        result = find_all(tmp_path)
+        assert [p.name for p in result] == ["2026-01.pdf", "2026-02.pdf", "2026-03.pdf"]
+
+    def test_find_all_returns_empty_for_missing_dir(self, tmp_path: Path) -> None:
+        """find_all returns [] for a directory that does not exist."""
+        assert find_all(tmp_path / "nonexistent") == []
+
+    def test_find_all_returns_empty_for_no_matching_files(self, tmp_path: Path) -> None:
+        """find_all returns [] when dir exists but contains no YYYY-MM.pdf files."""
+        (tmp_path / "notes.txt").touch()
+        (tmp_path / "random.pdf").touch()
+        assert find_all(tmp_path) == []

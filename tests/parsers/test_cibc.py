@@ -75,6 +75,7 @@ class TestParseTransactionRow:
         assert txn.direction is Direction.WITHDRAWAL
         assert txn.raw_description == "AMAZON* VANCOUVER BC"  # no category, no dates
         assert txn.date is not None and txn.date.isoformat() == "2026-04-26"
+        assert txn.bank_category == "Personal Expenses"
 
     def test_credit_row_is_a_deposit(self) -> None:
         row = self._amazon_row()[:-1] + [_w("12.00-", 520.0, 196, 539)]
@@ -137,3 +138,9 @@ class TestGoldenFile:
         stmt = CibcParser().parse(str(FIXTURE))
         assert stmt.bank == "CIBC"
         assert all(t.amount > 0 for t in stmt.transactions)
+
+    def test_bank_category_populated(self) -> None:
+        """CIBC transactions carry the bank's own category label."""
+        stmt = CibcParser().parse(str(FIXTURE))
+        categories = [t.bank_category for t in stmt.transactions if t.bank_category is not None]
+        assert len(categories) > 0

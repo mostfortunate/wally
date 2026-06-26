@@ -134,12 +134,20 @@ def parse_transaction_row(
     if not description:
         return None
 
+    category_text = " ".join(
+        w["text"]
+        for w in row
+        if columns.category_left <= w["x0"] < columns.amount_left and w is not last
+    )
+    bank_category = category_text.strip() or None
+
     direction = Direction.DEPOSIT if amount < 0 else Direction.WITHDRAWAL
     return Transaction(
         raw_description=description,
         amount=abs(amount),
         direction=direction,
         date=_leading_date(row, year),
+        bank_category=bank_category,
     )
 
 

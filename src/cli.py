@@ -6,13 +6,17 @@ A failed gate aborts with a diff and a non-zero exit; no report is emitted.
 
 Subcommands / usage:
     wally init                                            # scaffold wally.toml interactively
+    wally cache clear                                     # delete cached statement parses
+    wally annotate --cibc 2026-06 --rbc 2026-06          # label uncategorized transactions
+    wally annotate list                                   # show annotation status per statement
     wally                                                 # auto-discover latest from statements/
     wally --cibc <statement.pdf> --rbc <statement.pdf>   # combine both explicitly
-    wally --cibc <statement.pdf>                          # CIBC only
-    wally --rbc  <statement.pdf>                          # RBC only
+    wally --cibc 2026-06                            # CIBC only, resolved from statements/cibc/
+    wally --rbc  2026-06                            # RBC only, resolved from statements/rbc/
 
 When no --cibc/--rbc flags are given, wally looks for the most recent YYYY-MM.pdf
 in statements/cibc/ and statements/rbc/ (or the directory given by --statements-dir).
+--cibc/--rbc accept either a full file path or a bare YYYY-MM date stem.
 """
 
 from __future__ import annotations
@@ -50,6 +54,16 @@ def _period_label(cibc_path: str | None, rbc_path: str | None) -> str | None:
         return None
     labels = [date(int(s[:4]), int(s[5:]), 1).strftime("%B %Y") for s in sorted(months)]
     return " – ".join(labels)
+
+
+def _resolve_pdf_path(value: str, bank_dir: Path, parser: argparse.ArgumentParser) -> str:
+    """Accept a full path or a bare YYYY-MM stem, resolving stems against bank_dir."""
+    if Path(value).exists():
+        return value
+    candidate = bank_dir / f"{value}.pdf"
+    if candidate.exists():
+        return str(candidate)
+    parser.error(f"cannot find PDF {value!r} — tried {candidate}")
 
 
 DEFAULT_BUDGET_CONFIG = "wally.toml"
@@ -110,6 +124,81 @@ def main(argv: list[str] | None = None) -> int:
     cache_sub = cache_p.add_subparsers(dest="cache_action", required=True)
     cache_sub.add_parser("clear", help="delete all cached statement parses (~/.cache/wally/)")
 
+    annotate_p = subparsers.add_parser(
+        "annotate",
+        help="step through uncategorized transactions and grow classification.toml",
+        description=(
+            "Parses one or more statement PDFs, deduplicates uncategorized transactions "
+            "by merchant, and prompts you to assign each to a category via a single-keypress "
+            "menu. Writes patterns directly to classification.toml as production config. "
+            "Note: tomli-w does not preserve hand-written comments in classification.toml."
+        ),
+    )
+    annotate_p.add_argument(
+        "--cibc",
+        metavar="PDF",
+        action="append",
+        dest="cibc_pdfs",
+        default=[],
+        help="CIBC statement PDF or YYYY-MM stem (may be repeated)",
+    )
+    annotate_p.add_argument(
+        "--rbc",
+        metavar="PDF",
+        action="append",
+        dest="rbc_pdfs",
+        default=[],
+        help="RBC statement PDF or YYYY-MM stem (may be repeated)",
+    )
+    annotate_p.add_argument(
+        "-r",
+        "--rules",
+        default=DEFAULT_RULES_CONFIG,
+        dest="annotate_rules",
+        help="classification rules TOML to update (default: classification.toml)",
+    )
+    annotate_p.add_argument(
+        "--statements-dir",
+        default=DEFAULT_STATEMENTS_DIR,
+        metavar="DIR",
+        dest="annotate_statements_dir",
+        help="root folder for resolving YYYY-MM stems (default: statements/)",
+    )
+    annotate_sub = annotate_p.add_subparsers(dest="annotate_action")
+    annotate_list_p = annotate_sub.add_parser(
+        "list", help="show annotation status (done/remaining) per statement"
+    )
+    annotate_list_p.add_argument(
+        "--statements-dir",
+        default=DEFAULT_STATEMENTS_DIR,
+        metavar="DIR",
+        dest="list_statements_dir",
+        help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
+    )
+    annotate_list_p.add_argument(
+        "--cibc",
+        metavar="PDF",
+        action="append",
+        dest="list_cibc_pdfs",
+        default=[],
+        help="CIBC statement PDF (may be repeated; overrides auto-discovery)",
+    )
+    annotate_list_p.add_argument(
+        "--rbc",
+        metavar="PDF",
+        action="append",
+        dest="list_rbc_pdfs",
+        default=[],
+        help="RBC statement PDF (may be repeated; overrides auto-discovery)",
+    )
+    annotate_list_p.add_argument(
+        "-r",
+        "--rules",
+        default=DEFAULT_RULES_CONFIG,
+        dest="annotate_rules",
+        help="classification rules TOML to read (default: classification.toml)",
+    )
+
     parser.add_argument("--cibc", metavar="PDF", help="path to CIBC credit card statement")
     parser.add_argument("--rbc", metavar="PDF", help="path to RBC chequing statement")
     parser.add_argument(
@@ -142,6 +231,25 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Cleared {n} cached statement parse(s).")
         return 0
+
+    if args.command == "annotate":
+        from src.annotate import run_annotate, run_annotate_list
+
+        if args.annotate_action == "list":
+            return run_annotate_list(
+                rules_path=args.annotate_rules,
+                statements_dir=args.list_statements_dir,
+                cibc_paths=args.list_cibc_pdfs or None,
+                rbc_paths=args.list_rbc_pdfs or None,
+            )
+        base = Path(args.annotate_statements_dir)
+        cibc_pdfs = [_resolve_pdf_path(p, base / "cibc", parser) for p in args.cibc_pdfs]
+        rbc_pdfs = [_resolve_pdf_path(p, base / "rbc", parser) for p in args.rbc_pdfs]
+        return run_annotate(
+            cibc_paths=cibc_pdfs,
+            rbc_paths=rbc_pdfs,
+            rules_path=args.annotate_rules,
+        )
 
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:

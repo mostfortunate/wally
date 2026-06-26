@@ -52,6 +52,8 @@ class Transaction:
     date: date | None = None
     # RBC running balance; feeds the balance gate. None when the layout has no balance column.
     balance: Decimal | None = None
+    # CIBC's own "Spend Categories" label from the statement layout. Always None for RBC.
+    bank_category: str | None = None
 
 
 @dataclass

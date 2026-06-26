@@ -18,7 +18,7 @@ from platformdirs import user_cache_dir
 
 from src.parsers.base import Direction, Parser, Statement, Transaction
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 _CACHE_ROOT = Path(user_cache_dir("wally")) / "statements"
 
 
@@ -76,6 +76,7 @@ def _txn_to_json(txn: Transaction) -> dict[str, object]:
         "direction": txn.direction.name,
         "date": txn.date.isoformat() if txn.date is not None else None,
         "balance": str(txn.balance) if txn.balance is not None else None,
+        "bank_category": txn.bank_category,
     }
 
 
@@ -99,4 +100,7 @@ def _txn_from_json(data: dict[str, object]) -> Transaction:
         direction=Direction[str(data["direction"])],
         date=date.fromisoformat(str(raw_date)) if raw_date is not None else None,
         balance=Decimal(str(raw_balance)) if raw_balance is not None else None,
+        bank_category=str(data["bank_category"])
+        if data.get("bank_category") is not None
+        else None,
     )
