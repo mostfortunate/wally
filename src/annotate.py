@@ -426,18 +426,16 @@ def _run_list_picker(
         return [("class:footer", line)]
 
     def _hint() -> StyleAndTextTuples:
-        return [("class:hint", "  ↑/↓ or j/k navigate · Enter annotate · q/Esc quit")]
+        return [("class:hint", "  ↑/↓ navigate · Enter annotate · q/Esc quit")]
 
     kb = KeyBindings()
 
     @kb.add("up")
-    @kb.add("k")
     def move_up(event: KeyPressEvent) -> None:
         cursor[0] = (cursor[0] - 1) % len(rows)
         event.app.invalidate()
 
     @kb.add("down")
-    @kb.add("j")
     def move_down(event: KeyPressEvent) -> None:
         cursor[0] = (cursor[0] + 1) % len(rows)
         event.app.invalidate()
