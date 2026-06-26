@@ -251,9 +251,14 @@ def main(argv: list[str] | None = None) -> int:
             rules_path=args.annotate_rules,
         )
 
+    base = Path(args.statements_dir)
+    if args.cibc:
+        args.cibc = _resolve_pdf_path(args.cibc, base / "cibc", parser)
+    if args.rbc:
+        args.rbc = _resolve_pdf_path(args.rbc, base / "rbc", parser)
+
     discovered = not args.cibc and not args.rbc
     if not args.cibc and not args.rbc:
-        base = Path(args.statements_dir)
         cibc_path = find_latest(base / "cibc")
         rbc_path = find_latest(base / "rbc")
         if cibc_path is None and rbc_path is None:
