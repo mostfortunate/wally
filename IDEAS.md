@@ -35,6 +35,38 @@ Travel: Flights, hotels, and vacation packages.
 Utilities: Monthly household bills and subscriptions.
 Services: Professional and financial services.
 
+## Statement auto-download (`wally download`)
+
+A `wally download` command that uses Playwright to navigate to the CIBC and RBC online banking
+statement pages and download PDFs automatically — no manual save required.
+
+**Why bother:** The one-time cost is downloading ~50 historical statements. After that it's just
+2 PDFs a month (one CIBC, one RBC), which is trivial — but having it scripted means a monthly
+`wally download && wally` just works.
+
+**Key design constraint — no credential storage:**
+Use `playwright.chromium.launch_persistent_context(user_data_dir=<chrome-profile-path>)`.
+This opens a real Chrome window with the user's existing profile (cookies, saved sessions
+intact). If the user is already logged in to both banks, Playwright goes straight to the
+statements page and downloads. If the session has expired, the user logs in and completes 2FA
+manually in the opened window, then Playwright takes over. No passwords or OTPs ever touch
+Wally config.
+
+This sidesteps the main blockers:
+- No credential storage risk — session lives in the browser profile as normal
+- No RBC mobile-app 2FA problem — user completes it once in the window if needed
+- No bot-detection issues — runs in a real, non-headless Chrome with the user's real fingerprint
+
+**Scope:**
+- `wally download --cibc` — navigates to CIBC online banking statements, downloads the latest
+  (or a date range) as PDF into `statements/cibc/`
+- `wally download --rbc` — same for RBC into `statements/rbc/`
+- CIBC and RBC have different DOM structures; two separate scraper implementations needed
+- New dependency: `playwright` + `playwright install chromium`
+
+**What it is not:** A headless cron job. The user must have Chrome open or Wally opens it.
+Fully unattended automation is a non-goal — 2FA and session expiry make it unreliable.
+
 ## Near-term (Phase 3 — pre-v1 hardening)
 
 - Refund netting against the offset category
