@@ -5,8 +5,9 @@ deduplicates by normalized description, and presents an all-at-once form where
 the user can assign each unique merchant to a category. On Ctrl+D, patterns are
 written to classification.toml as production config.
 
-`wally annotate list` shows a summary table of every statement and how many
-transactions remain uncategorized, without entering interactive mode.
+`wally annotate list` shows an interactive picker of every statement. Navigate
+with ↑/↓, press Enter to annotate the selected statement, and press q or Escape
+to quit.
 """
 
 from __future__ import annotations
@@ -28,9 +29,7 @@ from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.styles import Style
-from rich import box
 from rich.console import Console
-from rich.table import Table
 
 from src.classification import ClassificationRules, classify, load_rules, normalize
 from src.ingestion.cache import cached_parse
@@ -416,15 +415,152 @@ def run_annotate(
     return 0
 
 
+def _build_list_rows(
+    entries: list[tuple[str, str]],
+    rules: ClassificationRules,
+) -> list[tuple[str, str, int, int, bool]]:
+    """Parse each statement and return display rows.
+
+    Returns a list of (filename, bank, n_total, n_uncategorized, is_done) tuples.
+    """
+    cibc_parser = CibcParser()
+    rbc_parser = RbcParser()
+    rows: list[tuple[str, str, int, int, bool]] = []
+    for bank, path in entries:
+        parser = cibc_parser if bank == "CIBC" else rbc_parser
+        stmt = cached_parse(path, parser)
+        classified = classify(stmt.transactions, rules)
+        n_uncategorized = sum(1 for c in classified if c.disposition is Disposition.UNCATEGORIZED)
+        n_total = len(stmt.transactions)
+        is_done = n_uncategorized == 0
+        rows.append((Path(path).name, bank, n_total, n_uncategorized, is_done))
+    return rows
+
+
+def _run_list_picker(
+    rows: list[tuple[str, str, int, int, bool]],
+) -> int | None:
+    """Interactive ↑/↓ picker for the statement list.
+
+    Returns the 0-based index of the selected row, or None if the user quit.
+    """
+    cursor: list[int] = [0]  # mutable slot so closures can share it
+
+    _FILE_W = 16
+    _BANK_W = 6
+    _TXN_W = 14
+    _UNC_W = 15
+    _DONE_W = 6
+
+    def _header() -> StyleAndTextTuples:
+        line = (
+            f"  {'File':<{_FILE_W}}  {'Bank':<{_BANK_W}}  "
+            f"{'Transactions':>{_TXN_W}}  {'Uncategorized':>{_UNC_W}}  {'Done':^{_DONE_W}}"
+        )
+        return [("class:header", line)]
+
+    def _make_row_control(idx: int) -> FormattedTextControl:
+        filename, bank, n_total, n_unc, is_done = rows[idx]
+        done_char = "✓" if is_done else "✗"
+
+        def get() -> StyleAndTextTuples:
+            try:
+                focused = get_app() is not None and cursor[0] == idx
+            except Exception:
+                focused = False
+            style = "class:row-focused" if focused else "class:row"
+            prefix = "> " if focused else "  "
+            line = (
+                f"{prefix}{filename:<{_FILE_W}}  {bank:<{_BANK_W}}  "
+                f"{n_total:>{_TXN_W}}  {n_unc:>{_UNC_W}}  {done_char:^{_DONE_W}}"
+            )
+            return [(style, line)]
+
+        return FormattedTextControl(get)
+
+    def _footer() -> StyleAndTextTuples:
+        total = len(rows)
+        done_count = sum(1 for _, _, _, _, d in rows if d)
+        remaining = total - done_count
+        total_unc = sum(n for _, _, _, n, _ in rows)
+        line = (
+            f"  {total} statement(s) · {done_count} done · "
+            f"{remaining} remaining ({total_unc} uncategorized transactions)"
+        )
+        return [("class:footer", line)]
+
+    def _hint() -> StyleAndTextTuples:
+        return [("class:hint", "  ↑/↓ navigate · Enter annotate · q/Esc quit")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def move_up(event: KeyPressEvent) -> None:
+        cursor[0] = (cursor[0] - 1) % len(rows)
+        event.app.invalidate()
+
+    @kb.add("down")
+    def move_down(event: KeyPressEvent) -> None:
+        cursor[0] = (cursor[0] + 1) % len(rows)
+        event.app.invalidate()
+
+    @kb.add("enter")
+    def select(event: KeyPressEvent) -> None:
+        event.app.exit(result=cursor[0])
+
+    @kb.add("q")
+    @kb.add("c-c")
+    @kb.add("escape")
+    def quit_picker(event: KeyPressEvent) -> None:
+        event.app.exit(result=None)
+
+    layout = Layout(
+        HSplit(
+            [
+                Window(content=FormattedTextControl(_header), height=1),
+                Window(height=1),
+                *[Window(content=_make_row_control(i), height=1) for i in range(len(rows))],
+                Window(height=1),
+                Window(content=FormattedTextControl(_footer), height=1),
+                Window(content=FormattedTextControl(_hint), height=1),
+            ]
+        )
+    )
+
+    style = Style.from_dict(
+        {
+            "header": "bold underline",
+            "row": "",
+            "row-focused": "bold",
+            "footer": "fg:ansibrightblack",
+            "hint": "fg:ansigreen",
+        }
+    )
+
+    app: Application[int | None] = Application(
+        layout=layout,
+        key_bindings=kb,
+        style=style,
+        full_screen=False,
+        erase_when_done=False,
+        mouse_support=False,
+    )
+    return app.run()
+
+
 def run_annotate_list(
     rules_path: str = "classification.toml",
     statements_dir: str = "statements",
     cibc_paths: list[str] | None = None,
     rbc_paths: list[str] | None = None,
 ) -> int:
-    """Entry point for `wally annotate list`. Returns process exit code."""
+    """Entry point for `wally annotate list`. Returns process exit code.
+
+    Presents an interactive ↑/↓ picker of all statements. Pressing Enter on a
+    row launches `run_annotate` for that statement; pressing q/Escape/Ctrl+C exits.
+    After annotating, the picker is re-shown so the user can annotate another file.
+    """
     rp = Path(rules_path)
-    rules = load_rules(rp) if rp.exists() else ClassificationRules(categories={}, exclusions={})
 
     entries: list[tuple[str, str]] = []  # (bank, path)
     if cibc_paths or rbc_paths:
@@ -443,54 +579,27 @@ def run_annotate_list(
         print("No statements found.")
         return 0
 
-    cibc_parser = CibcParser()
-    rbc_parser = RbcParser()
+    while True:
+        # Re-load rules each iteration so counts update after annotating
+        no_rules = ClassificationRules(categories={}, exclusions={})
+        rules = load_rules(rp) if rp.exists() else no_rules
+        rows = _build_list_rows(entries, rules)
 
-    table = Table(box=box.SIMPLE_HEAD, show_footer=False)
-    table.add_column("File")
-    table.add_column("Bank")
-    table.add_column("Transactions", justify="right")
-    table.add_column("Uncategorized", justify="right")
-    table.add_column("Done", justify="center")
+        choice = _run_list_picker(rows)
+        if choice is None:
+            return 0
 
-    total_statements = 0
-    done_count = 0
-    total_uncategorized = 0
-
-    for bank, path in entries:
-        parser = cibc_parser if bank == "CIBC" else rbc_parser
-        stmt = cached_parse(path, parser)
-        classified = classify(stmt.transactions, rules)
-        n_uncategorized = sum(1 for c in classified if c.disposition is Disposition.UNCATEGORIZED)
-        n_total = len(stmt.transactions)
-        is_done = n_uncategorized == 0
-        done_label = "[green]✓[/green]" if is_done else "[yellow]✗[/yellow]"
-
-        table.add_row(
-            Path(path).name,
-            bank,
-            str(n_total),
-            str(n_uncategorized),
-            done_label,
-        )
-
-        total_statements += 1
-        if is_done:
-            done_count += 1
-        total_uncategorized += n_uncategorized
-
-    _console.print(table)
-    remaining = total_statements - done_count
-    _console.print(
-        f"{total_statements} statement(s) · {done_count} done · "
-        f"{remaining} remaining ({total_uncategorized} uncategorized transactions)"
-    )
-    return 0
+        bank, path = entries[choice]
+        if bank == "CIBC":
+            run_annotate(cibc_paths=[path], rbc_paths=[], rules_path=rules_path)
+        else:
+            run_annotate(cibc_paths=[], rbc_paths=[path], rules_path=rules_path)
 
 
 __all__ = [
     "_all_unique_with_category",
     "_append_rule",
+    "_build_list_rows",
     "_default_pattern",
     "_delete_session",
     "_guess_category",
