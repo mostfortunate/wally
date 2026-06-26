@@ -119,6 +119,27 @@ def _unique_uncategorized(classified: list[Classified]) -> list[Transaction]:
     return result
 
 
+def _all_unique_with_category(
+    classified: list[Classified],
+) -> list[tuple[Transaction, str | None]]:
+    """Return (txn, current_category) for every unique merchant, EXCLUDED skipped.
+
+    CATEGORIZED rows carry their assigned category; UNCATEGORIZED rows carry None.
+    Uniqueness key is the same _default_pattern used elsewhere.
+    """
+    seen: set[str] = set()
+    result: list[tuple[Transaction, str | None]] = []
+    for c in classified:
+        if c.disposition is Disposition.EXCLUDED:
+            continue
+        key = _default_pattern(normalize(c.txn.raw_description))
+        if key not in seen:
+            seen.add(key)
+            cat = c.category if c.disposition is Disposition.CATEGORIZED else None
+            result.append((c.txn, cat))
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Session file helpers (kept for backward compatibility; tested in test_annotate.py)
 # ---------------------------------------------------------------------------
@@ -160,13 +181,14 @@ def _delete_session(session_path: Path) -> None:
 
 
 def _run_annotate_form(
-    queue: list[Transaction],
+    queue: list[tuple[Transaction, str | None]],
     rules: ClassificationRules,
 ) -> dict[int, str] | None:
     """All-at-once assignment form.
 
-    Returns {queue_index: category_name} for confirmed assignments, or None if aborted.
-    Empty fields are silently skipped (merchant will reappear on next run).
+    queue is a list of (transaction, prefill_category) — prefill_category is the current
+    classification or None when unknown.  Returns {queue_index: category_name} for every
+    confirmed non-empty field, or None if aborted.
     """
     category_names = sorted(rules.categories.keys())
     # Digit shortcuts: 1-9 then 0, mapped to first 10 sorted categories
@@ -176,9 +198,10 @@ def _run_annotate_form(
     completer = WordCompleter(category_names, ignore_case=True, sentence=True)
 
     buffers: list[Buffer] = []
-    for i, txn in enumerate(queue):
-        guess = _guess_category(normalize(txn.raw_description), rules)
-        doc = Document(guess) if guess else Document()
+    for i, (txn, prefill) in enumerate(queue):
+        # Use current category, fall back to guess from pattern matching
+        text = prefill or _guess_category(normalize(txn.raw_description), rules) or ""
+        doc = Document(text)
         buffers.append(
             Buffer(
                 name=f"txn_{i}",
@@ -280,27 +303,23 @@ def _run_annotate_form(
             ]
         )
 
-    def get_status() -> StyleAndTextTuples:
-        assigned = sum(1 for b in buffers if b.text.strip())
-        msg = f"{assigned}/{len(queue)} assigned  ·  {_FORM_HINT}"
-        return [("class:hint", msg)]
-
     legend_height = 2 if len(shortcuts) > 5 else 1
 
     layout = Layout(
         HSplit(
             [
                 Window(
-                    content=FormattedTextControl(
-                        f"Assign categories — {len(queue)} uncategorized merchants"
-                    ),
+                    content=FormattedTextControl(f"Assign categories — {len(queue)} merchants"),
                     height=1,
                 ),
                 Window(content=FormattedTextControl(get_legend), height=legend_height),
                 Window(height=1),
-                *[make_row(buf, txn) for buf, txn in zip(buffers, queue, strict=True)],
+                *[make_row(buf, txn) for buf, (txn, _) in zip(buffers, queue, strict=True)],
                 Window(height=1),
-                Window(content=FormattedTextControl(get_status), height=1),
+                Window(
+                    content=FormattedTextControl("  Ctrl+D save  ·  Ctrl+C cancel"),
+                    height=1,
+                ),
             ]
         ),
         focused_element=buffers[0],
@@ -368,20 +387,14 @@ def run_annotate(
         return 0
 
     rules = load_rules(rp) if rp.exists() else ClassificationRules(categories={}, exclusions={})
-    if not rules.categories:
-        _console.print(
-            f"[yellow]No categories found in {rp}. "
-            "Press [bold]n[/bold] to create categories as you go "
-            "or [bold]m[/bold] for miscellaneous.[/yellow]"
-        )
     classified = classify(transactions, rules)
-    unique = _unique_uncategorized(classified)
+    queue = _all_unique_with_category(classified)
 
-    if not unique:
-        print("All transactions are already categorized.")
+    if not queue:
+        print("No transactions found.")
         return 0
 
-    assignments = _run_annotate_form(unique, rules)
+    assignments = _run_annotate_form(queue, rules)
 
     if assignments is None:
         _console.print("\nCancelled — no changes saved.")
@@ -392,7 +405,7 @@ def run_annotate(
         return 0
 
     for idx, category in assignments.items():
-        txn = unique[idx]
+        txn, _ = queue[idx]
         pattern = _default_pattern(normalize(txn.raw_description))
         _append_rule(rp, category, pattern)
 
@@ -476,6 +489,7 @@ def run_annotate_list(
 
 
 __all__ = [
+    "_all_unique_with_category",
     "_append_rule",
     "_default_pattern",
     "_delete_session",
