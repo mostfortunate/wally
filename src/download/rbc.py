@@ -15,7 +15,7 @@ _TABLE_TIMEOUT_MS = 8_000
 
 class RBCDownloader:
     bank = "RBC"
-    statements_url = "https://www1.royalbank.com/sgw1/olb/profile-hub/documents-en"
+    statements_url = "https://www.rbcroyalbank.com/personal.html"
 
     def list_statements(self, page: Page) -> list[StatementEntry]:
         page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
