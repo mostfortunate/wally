@@ -41,13 +41,12 @@ class RBCDownloader:
         for year_value in year_values:
             year_select.select_option(value=year_value)
             page.locator(_SHOW_DOCS_SELECTOR).click()
-            # networkidle: waits for the XHR triggered by Show Documents to complete
-            # and Angular to finish rendering the new rows.
-            page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
             try:
+                # networkidle: waits for the XHR triggered by Show Documents to settle.
+                page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
                 page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
             except PlaywrightTimeoutError:
-                # No statements for this year; skip.
+                # No statements for this year (empty table or slow response); skip.
                 continue
             entries.extend(_scrape_rows(page))
 
