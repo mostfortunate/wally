@@ -54,6 +54,25 @@ class RBCDownloader:
         return entries
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
+        # The table only shows one year at a time. Navigate to the entry's year if
+        # the current selection doesn't already match (avoids redundant Show Docs clicks).
+        year_select = page.get_by_label("Year")
+        target_year = str(entry.date.year)
+        year_options = year_select.locator("option:not([disabled])").all()
+        target_value = next(
+            (
+                el.get_attribute("value")
+                for el in year_options
+                if (el.text_content() or "").strip() == target_year
+            ),
+            None,
+        )
+        if target_value is not None and year_select.input_value() != target_value:
+            year_select.select_option(value=target_value)
+            page.locator(_SHOW_DOCS_SELECTOR).click()
+            page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
+            page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
+
         selector = (
             f"[data-testid='desktop-document-download-link'][aria-label='{entry.aria_label}']"
         )
