@@ -14,10 +14,10 @@ from .base import BankDownloader, StatementEntry
 _TABLE_TIMEOUT_MS = 8_000
 _SHOW_DOCS_SELECTOR = "[data-testid='button-show-docs']"
 
-# Distinguish the two rbc-select-input dropdowns by a unique option value.
-# Month picker has option[value='00'] ("All months"); year picker has option[value='0'] (2026).
+# Month picker is the only rbc-select-input with an "All months" option (value="00").
+# Year picker is targeted by its aria label — using option-value matching is ambiguous because
+# the document-type picker (rbc-select-1) also has single-digit option values.
 _MONTH_SELECT = "select.rbc-select-input:has(option[value='00'])"
-_YEAR_SELECT = "select.rbc-select-input:has(option[value='0']:not([value='00']))"
 
 
 class RBCDownloader:
@@ -25,19 +25,21 @@ class RBCDownloader:
     statements_url = "https://www.rbcroyalbank.com/personal.html"
 
     def list_statements(self, page: Page) -> list[StatementEntry]:
+        year_select = page.get_by_label("Year")
+
         # "All months" once — stays selected for every year iteration.
         page.locator(_MONTH_SELECT).select_option(value="00")
 
         # Collect all selectable year option values in DOM order (newest → oldest).
         year_values = [
             v
-            for el in page.locator(f"{_YEAR_SELECT} option:not([disabled])").all()
+            for el in year_select.locator("option:not([disabled])").all()
             if (v := el.get_attribute("value")) is not None
         ]
 
         entries: list[StatementEntry] = []
         for year_value in year_values:
-            page.locator(_YEAR_SELECT).select_option(value=year_value)
+            year_select.select_option(value=year_value)
             page.locator(_SHOW_DOCS_SELECTOR).click()
             # networkidle: waits for the XHR triggered by Show Documents to complete
             # and Angular to finish rendering the new rows.
