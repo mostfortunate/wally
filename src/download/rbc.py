@@ -7,10 +7,17 @@ from datetime import date, datetime
 from pathlib import Path
 
 from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from .base import BankDownloader, StatementEntry
 
 _TABLE_TIMEOUT_MS = 8_000
+_SHOW_DOCS_SELECTOR = "[data-testid='button-show-docs']"
+
+# Distinguish the two rbc-select-input dropdowns by a unique option value.
+# Month picker has option[value='00'] ("All months"); year picker has option[value='0'] (2026).
+_MONTH_SELECT = "select.rbc-select-input:has(option[value='00'])"
+_YEAR_SELECT = "select.rbc-select-input:has(option[value='0']:not([value='00']))"
 
 
 class RBCDownloader:
@@ -18,27 +25,30 @@ class RBCDownloader:
     statements_url = "https://www.rbcroyalbank.com/personal.html"
 
     def list_statements(self, page: Page) -> list[StatementEntry]:
-        page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
-        rows = page.locator("rbc-data-table table tbody tr").all()
+        # "All months" once — stays selected for every year iteration.
+        page.locator(_MONTH_SELECT).select_option(value="00")
+
+        # Collect all selectable year option values in DOM order (newest → oldest).
+        year_values = [
+            v
+            for el in page.locator(f"{_YEAR_SELECT} option:not([disabled])").all()
+            if (v := el.get_attribute("value")) is not None
+        ]
+
         entries: list[StatementEntry] = []
-        for row in rows:
-            link = row.locator(
-                "td div.document-meta a[data-testid='desktop-document-download-link']"
-            )
-            if not link.count():
-                continue
-            aria_label = link.get_attribute("aria-label") or ""
+        for year_value in year_values:
+            page.locator(_YEAR_SELECT).select_option(value=year_value)
+            page.locator(_SHOW_DOCS_SELECTOR).click()
+            # networkidle: waits for the XHR triggered by Show Documents to complete
+            # and Angular to finish rendering the new rows.
+            page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
             try:
-                stmt_date = _parse_aria_date(aria_label)
-            except ValueError:
+                page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
+            except PlaywrightTimeoutError:
+                # No statements for this year; skip.
                 continue
-            entries.append(
-                StatementEntry(
-                    filename=f"{stmt_date.year}-{stmt_date.month:02d}.pdf",
-                    date=stmt_date,
-                    aria_label=aria_label,
-                )
-            )
+            entries.extend(_scrape_rows(page))
+
         return entries
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
@@ -50,6 +60,27 @@ class RBCDownloader:
             page.locator(selector).click()
         dl.value.save_as(str(dest))
         return dest
+
+
+def _scrape_rows(page: Page) -> list[StatementEntry]:
+    entries: list[StatementEntry] = []
+    for row in page.locator("rbc-data-table table tbody tr").all():
+        link = row.locator("td div.document-meta a[data-testid='desktop-document-download-link']")
+        if not link.count():
+            continue
+        aria_label = link.get_attribute("aria-label") or ""
+        try:
+            stmt_date = _parse_aria_date(aria_label)
+        except ValueError:
+            continue
+        entries.append(
+            StatementEntry(
+                filename=f"{stmt_date.year}-{stmt_date.month:02d}.pdf",
+                date=stmt_date,
+                aria_label=aria_label,
+            )
+        )
+    return entries
 
 
 def _parse_aria_date(aria_label: str) -> date:
