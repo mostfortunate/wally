@@ -36,14 +36,14 @@ class RBCDownloader:
                 StatementEntry(
                     filename=f"{stmt_date.year}-{stmt_date.month:02d}.pdf",
                     date=stmt_date,
+                    aria_label=aria_label,
                 )
             )
         return entries
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
-        date_str = f"{entry.date.strftime('%B')} {entry.date.day}, {entry.date.year}"
         selector = (
-            f"[data-testid='desktop-document-download-link'][aria-label*='Download {date_str}']"
+            f"[data-testid='desktop-document-download-link'][aria-label='{entry.aria_label}']"
         )
         dest = dest_dir / entry.filename
         with page.expect_download() as dl:
