@@ -20,9 +20,7 @@ from .base import BankDownloader
 # each one completes. 2 s puts the total rhythm at ~3–5 s per statement — clearly human.
 _INTER_DOWNLOAD_DELAY_S = 2.0
 
-_CHROME_PROFILE_MACOS = (
-    Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default"
-)
+_DEFAULT_PROFILE = Path.home() / ".local" / "share" / "wally" / "browser-profile"
 
 
 def run_download(
@@ -33,14 +31,8 @@ def run_download(
     month: str | None = None,
 ) -> int:
     """Run all downloaders and return a process exit code."""
-    profile = chrome_profile or _CHROME_PROFILE_MACOS
-    if not profile.exists():
-        print(
-            f"Chrome profile not found at {profile}\n"
-            "Is Google Chrome installed? Run Chrome at least once to create a profile.",
-            file=sys.stderr,
-        )
-        return 1
+    profile = chrome_profile or _DEFAULT_PROFILE
+    profile.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
