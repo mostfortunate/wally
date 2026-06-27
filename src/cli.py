@@ -162,6 +162,13 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="path to Chrome profile directory (default: macOS default Chrome profile)",
     )
+    download_p.add_argument(
+        "--month",
+        metavar="YYYY-MM",
+        dest="download_month",
+        default=None,
+        help="download only the statement for this month (e.g. 2026-06)",
+    )
 
     annotate_p = subparsers.add_parser(
         "annotate",
@@ -294,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
             downloaders,
             statements_dir=Path(args.download_statements_dir),
             chrome_profile=chrome_profile,
+            month=args.download_month,
         )
 
     if args.command == "annotate":

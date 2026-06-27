@@ -30,6 +30,7 @@ def run_download(
     statements_dir: Path,
     *,
     chrome_profile: Path | None = None,
+    month: str | None = None,
 ) -> int:
     """Run all downloaders and return a process exit code."""
     profile = chrome_profile or _CHROME_PROFILE_MACOS
@@ -56,6 +57,8 @@ def run_download(
             print(f"\n[{downloader.bank}] Navigating to statements page...")
             page.goto(downloader.statements_url)
             entries = downloader.list_statements(page)
+            if month:
+                entries = [e for e in entries if e.filename.startswith(month)]
             print(f"[{downloader.bank}] Found {len(entries)} statement(s).")
 
             skipped = downloaded = 0
