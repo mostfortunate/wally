@@ -1,11 +1,9 @@
 # Wally
 
-> Budget reconciliation from bank statement PDFs.
+> Know where your money went, to the penny.
 
-Wally ingests RBC chequing and CIBC credit card statements, extracts every transaction,
-classifies spend by category, and reports whether each category is **within budget,
-underspending, or overspending** — with a hard correctness guarantee: if the numbers don't
-reconcile, the run aborts with a diff and emits no report.
+Wally reads your RBC and CIBC statements, classifies every transaction, and tells you
+whether each spending category is within budget, underspending, or overspending.
 
 <!-- Add a screenshot of `uv run wally` terminal output here -->
 
@@ -60,7 +58,7 @@ uv run wally          # auto-discovers the latest statement in each folder
 
 ### `wally.toml` — budget limits
 
-Copy from `wally.example.toml` and fill in your numbers:
+Run `uv run wally init` to create this interactively, or copy from `wally.example.toml`:
 
 ```toml
 [budget.limits]
