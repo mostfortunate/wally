@@ -17,9 +17,6 @@ class CIBCDownloader:
     bank = "CIBC"
     statements_url = "https://www.cibc.com/en/personal-banking/online-banking.html"
 
-    def is_authenticated(self, page: Page) -> bool:
-        raise NotImplementedError("CIBC: fill in the authenticated-page selector")
-
     def list_statements(self, page: Page) -> list[StatementEntry]:
         raise NotImplementedError("CIBC: fill in statement list scraping")
 
