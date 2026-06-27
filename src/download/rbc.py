@@ -6,11 +6,11 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Page
 
 from .base import BankDownloader, StatementEntry
 
-_AUTH_TIMEOUT_MS = 8_000
+_TABLE_TIMEOUT_MS = 8_000
 
 
 class RBCDownloader:
@@ -18,15 +18,8 @@ class RBCDownloader:
     # TODO: update to the exact RBC online banking statements page URL after inspecting the SPA
     statements_url = "https://www.rbcroyalbank.com/ways-to-bank/online-banking/index.html"
 
-    def is_authenticated(self, page: Page) -> bool:
-        try:
-            page.wait_for_selector("rbc-data-table", timeout=_AUTH_TIMEOUT_MS)
-            return True
-        except PlaywrightTimeoutError:
-            return False
-
     def list_statements(self, page: Page) -> list[StatementEntry]:
-        page.wait_for_selector("rbc-data-table table tbody tr", timeout=_AUTH_TIMEOUT_MS)
+        page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
         rows = page.locator("rbc-data-table table tbody tr").all()
         entries: list[StatementEntry] = []
         for row in rows:

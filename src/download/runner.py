@@ -25,16 +25,6 @@ _CHROME_PROFILE_MACOS = (
 )
 
 
-def _prompt_login(bank: str) -> None:
-    try:
-        input(
-            f"\n  [{bank}] Session expired — complete login in the browser window, "
-            "then press Enter to continue..."
-        )
-    except KeyboardInterrupt:
-        raise
-
-
 def run_download(
     downloaders: list[BankDownloader],
     statements_dir: Path,
@@ -65,11 +55,6 @@ def run_download(
 
             print(f"\n[{downloader.bank}] Navigating to statements page...")
             page.goto(downloader.statements_url)
-
-            if not downloader.is_authenticated(page):
-                _prompt_login(downloader.bank)
-                page.goto(downloader.statements_url)
-
             entries = downloader.list_statements(page)
             print(f"[{downloader.bank}] Found {len(entries)} statement(s).")
 

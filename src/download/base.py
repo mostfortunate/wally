@@ -22,10 +22,6 @@ class BankDownloader(Protocol):
     bank: str  # display name, e.g. "CIBC" or "RBC"
     statements_url: str  # URL to navigate to for the statements list page
 
-    def is_authenticated(self, page: Page) -> bool:
-        """Return True if the current page confirms an active session."""
-        ...
-
     def list_statements(self, page: Page) -> list[StatementEntry]:
         """Return every available statement on the current page, newest first."""
         ...
