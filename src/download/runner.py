@@ -8,11 +8,17 @@ downloads any that are not already present on disk.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 from .base import BankDownloader
+
+# Pause between downloads to match human pacing and avoid triggering bank anti-bot systems.
+# The download itself takes 1–3 s (network + file write); this is the additional wait after
+# each one completes. 2 s puts the total rhythm at ~3–5 s per statement — clearly human.
+_INTER_DOWNLOAD_DELAY_S = 2.0
 
 _CHROME_PROFILE_MACOS = (
     Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default"
@@ -78,6 +84,7 @@ def run_download(
                 downloader.download(page, entry, dest_dir)
                 print(" done")
                 downloaded += 1
+                time.sleep(_INTER_DOWNLOAD_DELAY_S)
 
             print(f"[{downloader.bank}] {downloaded} downloaded, {skipped} already present.")
 
