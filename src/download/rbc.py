@@ -53,16 +53,10 @@ class RBCDownloader:
 
 
 def _parse_aria_date(aria_label: str) -> date:
-    m = re.search(r"Download (\w+\.? \d+, \d{4})", aria_label)
+    m = re.search(r"Download (\w+ \d+, \d{4})", aria_label)
     if not m:
         raise ValueError(f"Cannot parse date from aria-label: {aria_label!r}")
-    date_str = m.group(1).replace(".", "")  # "Feb. 2, 2026" → "Feb 2, 2026"
-    for fmt in ("%B %d, %Y", "%b %d, %Y"):
-        try:
-            return datetime.strptime(date_str, fmt).date()
-        except ValueError:
-            continue
-    raise ValueError(f"Cannot parse date from aria-label: {aria_label!r}")
+    return datetime.strptime(m.group(1), "%B %d, %Y").date()
 
 
 # Satisfy the BankDownloader protocol at type-check time.
