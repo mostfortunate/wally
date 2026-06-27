@@ -14,6 +14,7 @@ from playwright.sync_api import Page
 class StatementEntry:
     filename: str  # "2026-01.pdf" — used for dedup against existing files on disk
     date: date  # parsed date, for display
+    aria_label: str = ""  # raw aria-label from the DOM; used to re-locate the link in download()
 
 
 class BankDownloader(Protocol):
