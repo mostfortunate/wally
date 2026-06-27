@@ -71,6 +71,7 @@ def run_download(
 
             print(f"[{downloader.bank}] {downloaded} downloaded, {skipped} already present.")
 
+        input("\nAll done. Press Enter to close the browser...")
         ctx.close()
 
     return 0
