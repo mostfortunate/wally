@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 from .base import BankDownloader
 
@@ -48,7 +48,15 @@ def run_download(
 
             print(f"\n[{downloader.bank}] Navigating to statements page...")
             page.goto(downloader.statements_url)
-            entries = downloader.list_statements(page)
+            try:
+                entries = downloader.list_statements(page)
+            except PlaywrightTimeoutError:
+                input(
+                    f"  [{downloader.bank}] Log in in the browser window, "
+                    "then press Enter to continue..."
+                )
+                page.goto(downloader.statements_url)
+                entries = downloader.list_statements(page)
             if month:
                 entries = [e for e in entries if e.filename.startswith(month)]
             print(f"[{downloader.bank}] Found {len(entries)} statement(s).")
