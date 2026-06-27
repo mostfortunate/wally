@@ -7,6 +7,9 @@ A failed gate aborts with a diff and a non-zero exit; no report is emitted.
 Subcommands / usage:
     wally init                                            # scaffold wally.toml interactively
     wally cache clear                                     # delete cached statement parses
+    wally download                                        # download all statements from CIBC + RBC
+    wally download --cibc                                 # CIBC only
+    wally download --rbc                                  # RBC only
     wally annotate --cibc 2026-06 --rbc 2026-06          # label uncategorized transactions
     wally annotate list                                   # show annotation status per statement
     wally                                                 # auto-discover latest from statements/
@@ -124,6 +127,42 @@ def main(argv: list[str] | None = None) -> int:
     cache_sub = cache_p.add_subparsers(dest="cache_action", required=True)
     cache_sub.add_parser("clear", help="delete all cached statement parses (~/.cache/wally/)")
 
+    download_p = subparsers.add_parser(
+        "download",
+        help="download all available statements from CIBC and/or RBC via Chrome",
+        description=(
+            "Opens a persistent Chrome window reusing your existing browser session. "
+            "If your session has expired, complete login manually in the window and press Enter. "
+            "Already-downloaded PDFs are skipped."
+        ),
+    )
+    download_p.add_argument(
+        "--cibc",
+        action="store_true",
+        dest="download_cibc",
+        help="download CIBC statements only",
+    )
+    download_p.add_argument(
+        "--rbc",
+        action="store_true",
+        dest="download_rbc",
+        help="download RBC statements only",
+    )
+    download_p.add_argument(
+        "--statements-dir",
+        default=DEFAULT_STATEMENTS_DIR,
+        metavar="DIR",
+        dest="download_statements_dir",
+        help="root folder for saving PDFs (default: statements/)",
+    )
+    download_p.add_argument(
+        "--chrome-profile",
+        metavar="PATH",
+        dest="download_chrome_profile",
+        default=None,
+        help="path to Chrome profile directory (default: macOS default Chrome profile)",
+    )
+
     annotate_p = subparsers.add_parser(
         "annotate",
         help="step through uncategorized transactions and grow classification.toml",
@@ -231,6 +270,31 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Cleared {n} cached statement parse(s).")
         return 0
+
+    if args.command == "download":
+        from src.download import run_download
+        from src.download.cibc import CIBCDownloader
+        from src.download.rbc import RBCDownloader
+
+        use_cibc = args.download_cibc
+        use_rbc = args.download_rbc
+        if not use_cibc and not use_rbc:
+            use_cibc = use_rbc = True  # default: both banks
+
+        downloaders = []
+        if use_cibc:
+            downloaders.append(CIBCDownloader())
+        if use_rbc:
+            downloaders.append(RBCDownloader())
+
+        chrome_profile = (
+            Path(args.download_chrome_profile) if args.download_chrome_profile else None
+        )
+        return run_download(
+            downloaders,
+            statements_dir=Path(args.download_statements_dir),
+            chrome_profile=chrome_profile,
+        )
 
     if args.command == "annotate":
         from src.annotate import run_annotate, run_annotate_list
