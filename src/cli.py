@@ -1,4 +1,4 @@
-"""Wally CLI — budget reconciliation from bank statement PDFs.
+"""Wally CLI — monthly budget tracker from bank statement PDFs.
 
 Pipeline: parse (CIBC and/or RBC) → balance gate (RBC only; CIBC's runs inside the
 parser) → classify combined transactions → partition gate → aggregate → print report.
