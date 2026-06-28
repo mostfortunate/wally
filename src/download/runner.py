@@ -51,23 +51,31 @@ def run_download(
                 f"  [{downloader.bank}] Sign in, navigate to your statements page, "
                 "and select the right account — then press Enter..."
             )
-            entries = downloader.list_statements(page)
-            if month:
-                entries = [e for e in entries if e.filename.startswith(month)]
-            print(f"[{downloader.bank}] Found {len(entries)} statement(s).")
-
             skipped = downloaded = 0
-            for entry in entries:
-                dest = dest_dir / entry.filename
-                if dest.exists():
-                    print(f"  skip  {entry.filename}")
-                    skipped += 1
-                    continue
-                print(f"  down  {entry.filename} ...", end="", flush=True)
-                downloader.download(page, entry, dest_dir)
-                print(" done")
-                downloaded += 1
-                time.sleep(_INTER_DOWNLOAD_DELAY_S)
+
+            # Use pages() for downloaders whose table only shows one year at a time —
+            # entries must be downloaded while the correct page is still loaded.
+            # Fall back to list_statements() for simple single-page downloaders.
+            batches = (
+                downloader.pages(page)  # type: ignore[attr-defined]
+                if hasattr(downloader, "pages")
+                else [downloader.list_statements(page)]
+            )
+
+            for batch in batches:
+                if month:
+                    batch = [e for e in batch if e.filename.startswith(month)]
+                for entry in batch:
+                    dest = dest_dir / entry.filename
+                    if dest.exists():
+                        print(f"  skip  {entry.filename}")
+                        skipped += 1
+                        continue
+                    print(f"  down  {entry.filename} ...", end="", flush=True)
+                    downloader.download(page, entry, dest_dir)
+                    print(" done")
+                    downloaded += 1
+                    time.sleep(_INTER_DOWNLOAD_DELAY_S)
 
             print(f"[{downloader.bank}] {downloaded} downloaded, {skipped} already present.")
 

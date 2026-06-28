@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Generator
 from datetime import date, datetime
 from pathlib import Path
 
@@ -24,54 +25,35 @@ class RBCDownloader:
     bank = "RBC"
     statements_url = "https://www.rbcroyalbank.com/personal.html"
 
-    def list_statements(self, page: Page) -> list[StatementEntry]:
-        year_select = page.get_by_label("Year")
+    def pages(self, page: Page) -> Generator[list[StatementEntry]]:
+        """Yield one batch of entries per year, newest first.
 
-        # "All months" once — stays selected for every year iteration.
+        Keeps the table in the correct state for download() — the runner must
+        download each yielded batch before advancing to the next year.
+        """
+        year_select = page.get_by_label("Year")
         page.locator(_MONTH_SELECT).select_option(value="00")
 
-        # Collect all selectable year option values in DOM order (newest → oldest).
         year_values = [
             v
             for el in year_select.locator("option:not([disabled])").all()
             if (v := el.get_attribute("value")) is not None
         ]
 
-        entries: list[StatementEntry] = []
         for year_value in year_values:
             year_select.select_option(value=year_value)
             page.locator(_SHOW_DOCS_SELECTOR).click()
             try:
-                # networkidle: waits for the XHR triggered by Show Documents to settle.
                 page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
                 page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
             except PlaywrightTimeoutError:
-                # No statements for this year (empty table or slow response); skip.
                 continue
-            entries.extend(_scrape_rows(page))
+            yield _scrape_rows(page)
 
-        return entries
+    def list_statements(self, page: Page) -> list[StatementEntry]:
+        return [entry for batch in self.pages(page) for entry in batch]
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
-        # The table only shows one year at a time. Navigate to the entry's year if
-        # the current selection doesn't already match (avoids redundant Show Docs clicks).
-        year_select = page.get_by_label("Year")
-        target_year = str(entry.date.year)
-        year_options = year_select.locator("option:not([disabled])").all()
-        target_value = next(
-            (
-                el.get_attribute("value")
-                for el in year_options
-                if (el.text_content() or "").strip() == target_year
-            ),
-            None,
-        )
-        if target_value is not None and year_select.input_value() != target_value:
-            year_select.select_option(value=target_value)
-            page.locator(_SHOW_DOCS_SELECTOR).click()
-            page.wait_for_load_state("networkidle", timeout=_TABLE_TIMEOUT_MS)
-            page.wait_for_selector("rbc-data-table table tbody tr", timeout=_TABLE_TIMEOUT_MS)
-
         selector = (
             f"[data-testid='desktop-document-download-link'][aria-label='{entry.aria_label}']"
         )
