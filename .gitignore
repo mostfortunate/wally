@@ -231,3 +231,4 @@ wally.toml
 
 # Wally — statement PDFs contain full account PII; keep off the remote.
 statements/**/*.pdf
+
