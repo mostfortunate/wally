@@ -235,6 +235,6 @@ def run_init(config_path: str, console: Console | None = None) -> int:
         return 1
 
     path.write_text(build_toml(limits, statements_dir))
-    console.print(f"\n[green]✓[/green] Written to [bold]{path}[/bold]\n")
+    console.print(f"\n[green]✓[/green] successfully written to [bold]{path}[/bold]\n")
     console.print("Run [bold]wally[/bold] to generate your first report.")
     return 0
