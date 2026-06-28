@@ -13,9 +13,16 @@
 [categories]
 # <category> = ["substring", "substring", ...]
 # The category names must match the ones in your wally.toml budget limits.
-takeout   = ["tim hortons", "mcdonalds", "uber eats", "doordash"]
-groceries = ["save on foods", "costco", "no frills"]
-gas       = ["petro", "shell", "esso"]
+Transportation    = ["petro-canada", "shell", "esso", "spothero"]
+Restaurants       = ["doordash", "ubereats", "timhortons", "dunkin", "mcdonalds", "pizzapizza"]
+Groceries         = ["walmart", "costco", "nofrills", "saveonfoods", "freshco"]
+Entertainment     = ["netflix", "spotify", "cineplex"]
+Shopping          = ["amazon", "shein", "dollarama"]
+Personal          = ["planet fitness", "shoppers drug mart", "rexall"]
+"Home & Garden"   = ["home depot", "ikea", "canadian tire"]
+Travel            = ["aircanada", "westjet", "airbnb"]
+Utilities         = ["rogers", "bell", "hydro"]
+Services          = []
 
 [exclude]
 # <reason> = ["substring", ...]   — matched lines are EXCLUDED (money moved, not spend)

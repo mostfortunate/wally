@@ -14,9 +14,16 @@
 
 [budget.limits]
 # <category> = "<monthly limit>"
-takeout   = "100.00"
-groceries = "600.00"
-gas       = "300.00"
+Transportation  = "0"
+Restaurants     = "0"
+Groceries       = "0"
+Entertainment   = "0"
+Shopping        = "0"
+Personal        = "0"
+"Home & Garden" = "0"
+Travel          = "0"
+Utilities       = "0"
+Services        = "0"
 
 [statements]
 # Root folder containing cibc/ and rbc/ subdirectories. The CLI picks the latest
