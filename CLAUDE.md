@@ -7,9 +7,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Remote: `https://github.com/mostfortunate/wally.git`
 
 # Wally, a Monthly Budget Tracker — Developer Guide
-
 A CLI tool that reads bank statement PDFs, categorises every transaction, and reports
 whether each spending category is **within budget, underspending, or overspending**.
+
+---
+
+## 🔒 Privacy — statement files are off-limits
+
+**Never open, read, or inspect any file under `statements/`** (e.g. `statements/cibc/*.pdf`,
+`statements/rbc/*.pdf`) without explicit consent from the user **in the same conversation turn**.
+
+Even when the user has granted consent:
+1. Ask for confirmation a second time before opening the file.
+2. Use the file only for the specific purpose consented to — do not read it for any other reason.
+
+Statement PDFs contain real personal financial data. When in doubt, do not open them.
 
 ---
 
