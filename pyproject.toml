@@ -1,7 +1,7 @@
 [project]
 name = "wally"
 version = "0.5.0"
-description = "A budget reconciliation CLI that ingests bank-statement PDFs, classifies transactions, and reports spending against monthly budget limits."
+description = "A monthly budget tracker that reads bank-statement PDFs, categorises transactions, and reports spending against your limits."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
