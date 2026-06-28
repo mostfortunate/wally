@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 import tomllib
 from pathlib import Path
@@ -445,12 +446,24 @@ def _run_list_picker(
     Returns the 0-based index of the selected row, or None if the user quit.
     """
     cursor: list[int] = [0]  # mutable slot so closures can share it
+    viewport_start: list[int] = [0]
 
     _FILE_W = 16
     _BANK_W = 6
     _TXN_W = 14
     _UNC_W = 15
     _DONE_W = 6
+    _CHROME_ROWS = 5  # header + 2 blanks + footer + hint
+
+    def _visible_count() -> int:
+        return max(1, shutil.get_terminal_size().lines - _CHROME_ROWS)
+
+    def _scroll_to_cursor() -> None:
+        vis = _visible_count()
+        if cursor[0] < viewport_start[0]:
+            viewport_start[0] = cursor[0]
+        elif cursor[0] >= viewport_start[0] + vis:
+            viewport_start[0] = cursor[0] - vis + 1
 
     def _header() -> StyleAndTextTuples:
         line = (
@@ -459,24 +472,22 @@ def _run_list_picker(
         )
         return [("class:header", line)]
 
-    def _make_row_control(idx: int) -> FormattedTextControl:
-        filename, bank, n_total, n_unc, is_done = rows[idx]
-        done_char = "✓" if is_done else "✗"
-
-        def get() -> StyleAndTextTuples:
-            try:
-                focused = get_app() is not None and cursor[0] == idx
-            except Exception:
-                focused = False
-            style = "class:row-focused" if focused else "class:row"
-            prefix = "> " if focused else "  "
+    def _rows_content() -> StyleAndTextTuples:
+        _scroll_to_cursor()
+        vis = _visible_count()
+        result: StyleAndTextTuples = []
+        for i in range(viewport_start[0], min(viewport_start[0] + vis, len(rows))):
+            filename, bank, n_total, n_unc, is_done = rows[i]
+            done_char = "✓" if is_done else "✗"
+            style = "class:row-focused" if cursor[0] == i else "class:row"
+            prefix = "> " if cursor[0] == i else "  "
             line = (
                 f"{prefix}{filename:<{_FILE_W}}  {bank:<{_BANK_W}}  "
                 f"{n_total:>{_TXN_W}}  {n_unc:>{_UNC_W}}  {done_char:^{_DONE_W}}"
             )
-            return [(style, line)]
-
-        return FormattedTextControl(get)
+            result.append((style, line))
+            result.append(("", "\n"))
+        return result
 
     def _footer() -> StyleAndTextTuples:
         total = len(rows)
@@ -490,7 +501,7 @@ def _run_list_picker(
         return [("class:footer", line)]
 
     def _hint() -> StyleAndTextTuples:
-        return [("class:hint", "  ↑/↓ navigate · Enter annotate · q/Esc quit")]
+        return [("class:hint", "  ↑/↓ navigate · Enter annotate · Esc quit")]
 
     kb = KeyBindings()
 
@@ -519,7 +530,7 @@ def _run_list_picker(
             [
                 Window(content=FormattedTextControl(_header), height=1),
                 Window(height=1),
-                *[Window(content=_make_row_control(i), height=1) for i in range(len(rows))],
+                Window(content=FormattedTextControl(_rows_content)),
                 Window(height=1),
                 Window(content=FormattedTextControl(_footer), height=1),
                 Window(content=FormattedTextControl(_hint), height=1),
