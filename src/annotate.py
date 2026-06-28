@@ -490,8 +490,10 @@ def _run_list_picker(
             done_char = "✓" if is_done else "✗"
             focused = cursor[0] == i
             style = "class:row-focused" if focused else "class:row"
-            check_style = ("class:done-focused" if focused else "class:done") if is_done else (
-                "class:not-done-focused" if focused else "class:not-done"
+            check_style = (
+                ("class:done-focused" if focused else "class:done")
+                if is_done
+                else ("class:not-done-focused" if focused else "class:not-done")
             )
             prefix = "> " if focused else "  "
             main = (
