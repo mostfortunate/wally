@@ -6,6 +6,7 @@ the CIBC online banking statements page to identify selectors and download trigg
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 
 from playwright.sync_api import Page
@@ -17,7 +18,7 @@ class CIBCDownloader:
     bank = "CIBC"
     statements_url = "https://www.cibc.com/en/personal-banking/online-banking.html"
 
-    def list_statements(self, page: Page) -> list[StatementEntry]:
+    def statements_by_year(self, page: Page) -> Generator[list[StatementEntry]]:
         raise NotImplementedError("CIBC: fill in statement list scraping")
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
