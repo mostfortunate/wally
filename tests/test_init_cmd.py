@@ -35,8 +35,19 @@ class TestBuildToml:
 
 class TestCategories:
     def test_all_keys_are_valid_toml_identifiers(self) -> None:
+        import re
+
+        # Bare TOML key: letters, digits, hyphens, underscores.
+        # Keys with spaces or & must be quoted — build_toml does this automatically.
+        _bare = re.compile(r"^[A-Za-z0-9_-]+$")
+        _needs_quoting = re.compile(r"[ &]")
         for key, _ in CATEGORIES:
-            assert key.replace("_", "").isalnum(), f"{key!r} is not a valid TOML key"
+            if _needs_quoting.search(key):
+                # Verify build_toml actually quotes it.
+                out = build_toml({key: Decimal("1")})
+                assert f'"{key}"' in out, f"{key!r} needs quoting but build_toml didn't quote it"
+            else:
+                assert _bare.match(key), f"{key!r} is not a valid bare TOML key"
 
     def test_no_duplicate_keys(self) -> None:
         keys = [k for k, _ in CATEGORIES]

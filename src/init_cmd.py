@@ -24,16 +24,16 @@ from rich.prompt import Confirm, Prompt
 
 # Ordered default categories. Key becomes the TOML key; label is displayed.
 CATEGORIES: list[tuple[str, str]] = [
-    ("groceries", "Groceries"),
-    ("restaurants", "Restaurants"),
-    ("transportation", "Transportation"),
-    ("entertainment", "Entertainment"),
-    ("shopping", "Shopping"),
-    ("personal_care", "Personal Care"),
-    ("home_and_garden", "Home & Garden"),
-    ("travel", "Travel"),
-    ("utilities", "Utilities"),
-    ("services", "Services"),
+    ("Groceries", "Groceries"),
+    ("Restaurants", "Restaurants"),
+    ("Transportation", "Transportation"),
+    ("Entertainment", "Entertainment"),
+    ("Shopping", "Shopping"),
+    ("Personal", "Personal"),
+    ("Home & Garden", "Home & Garden"),
+    ("Travel", "Travel"),
+    ("Utilities", "Utilities"),
+    ("Services", "Services"),
 ]
 
 _HINT = "↑↓ navigate · empty to skip · Ctrl+D confirm · Ctrl+C cancel"
@@ -141,7 +141,7 @@ def _run_category_form() -> dict[str, Decimal] | None:
                         total += val
                 except InvalidOperation:
                     pass
-        return [("class:total", f"Total Budget: ${total:,.2f}")]
+        return [("class:total", f"Total Monthly Budget: ${total:,.2f}")]
 
     def get_status() -> StyleAndTextTuples:
         msg = status[0]
@@ -191,7 +191,8 @@ def build_toml(limits: dict[str, Decimal], statements_dir: str = "statements") -
         "[budget.limits]",
     ]
     for key, amount in limits.items():
-        lines.append(f'{key} = "{amount:.2f}"')
+        toml_key = f'"{key}"' if any(c in key for c in " &") else key
+        lines.append(f'{toml_key} = "{amount:.2f}"')
     lines += [
         "",
         "[statements]",
