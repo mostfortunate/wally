@@ -31,7 +31,7 @@ from datetime import date
 from pathlib import Path
 
 from src.budget import BudgetLimits, aggregate
-from src.budget.config import load_budget_limits
+from src.budget.config import load_budget_limits, load_statements_dir
 from src.classification import ClassificationRules, classify, load_rules
 from src.ingestion.cache import cached_parse
 from src.ingestion.cache import clear as cache_clear
@@ -150,10 +150,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     download_p.add_argument(
         "--statements-dir",
-        default=DEFAULT_STATEMENTS_DIR,
+        default=None,
         metavar="DIR",
         dest="download_statements_dir",
-        help="root folder for saving PDFs (default: statements/)",
+        help="root folder for saving PDFs (default: [statements] dir in wally.toml, else statements/)",
     )
     download_p.add_argument(
         "--chrome-profile",
@@ -205,10 +205,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     annotate_p.add_argument(
         "--statements-dir",
-        default=DEFAULT_STATEMENTS_DIR,
+        default=None,
         metavar="DIR",
         dest="annotate_statements_dir",
-        help="root folder for resolving YYYY-MM stems (default: statements/)",
+        help="root folder for resolving YYYY-MM stems (default: [statements] dir in wally.toml, else statements/)",
     )
     annotate_sub = annotate_p.add_subparsers(dest="annotate_action")
     annotate_list_p = annotate_sub.add_parser(
@@ -216,10 +216,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     annotate_list_p.add_argument(
         "--statements-dir",
-        default=DEFAULT_STATEMENTS_DIR,
+        default=None,
         metavar="DIR",
         dest="list_statements_dir",
-        help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
+        help="root folder containing cibc/ and rbc/ subdirectories (default: [statements] dir in wally.toml, else statements/)",
     )
     annotate_list_p.add_argument(
         "--cibc",
@@ -255,9 +255,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--statements-dir",
-        default=DEFAULT_STATEMENTS_DIR,
+        default=None,
         metavar="DIR",
-        help="root folder containing cibc/ and rbc/ subdirectories (default: statements/)",
+        help="root folder containing cibc/ and rbc/ subdirectories (default: [statements] dir in wally.toml, else statements/)",
     )
     parser.add_argument(
         "--no-cache",
@@ -299,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return run_download(
             downloaders,
-            statements_dir=Path(args.download_statements_dir),
+            statements_dir=Path(args.download_statements_dir or load_statements_dir()),
             chrome_profile=chrome_profile,
             month=args.download_month,
         )
@@ -310,11 +310,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.annotate_action == "list":
             return run_annotate_list(
                 rules_path=args.annotate_rules,
-                statements_dir=args.list_statements_dir,
+                statements_dir=args.list_statements_dir or load_statements_dir(),
                 cibc_paths=args.list_cibc_pdfs or None,
                 rbc_paths=args.list_rbc_pdfs or None,
             )
-        base = Path(args.annotate_statements_dir)
+        base = Path(args.annotate_statements_dir or load_statements_dir())
         cibc_pdfs = [_resolve_pdf_path(p, base / "cibc", parser) for p in args.cibc_pdfs]
         rbc_pdfs = [_resolve_pdf_path(p, base / "rbc", parser) for p in args.rbc_pdfs]
         return run_annotate(
@@ -323,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             rules_path=args.annotate_rules,
         )
 
-    base = Path(args.statements_dir)
+    base = Path(args.statements_dir or load_statements_dir(args.config))
     if args.cibc:
         args.cibc = _resolve_pdf_path(args.cibc, base / "cibc", parser)
     if args.rbc:

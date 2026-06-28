@@ -35,4 +35,14 @@ def load_budget_limits(path: str | Path) -> BudgetLimits:
     return parse_budget_limits(data)
 
 
-__all__ = ["load_budget_limits", "parse_budget_limits"]
+def load_statements_dir(path: str | Path = "wally.toml") -> str:
+    """Return [statements] dir from wally.toml, or 'statements' if absent/unset."""
+    p = Path(path)
+    if not p.exists():
+        return "statements"
+    with p.open("rb") as fh:
+        data = tomllib.load(fh)
+    return data.get("statements", {}).get("dir", "statements")
+
+
+__all__ = ["load_budget_limits", "load_statements_dir", "parse_budget_limits"]
