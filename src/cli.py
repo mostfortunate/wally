@@ -153,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="DIR",
         dest="download_statements_dir",
-        help="root folder for saving PDFs (default: [statements] dir in wally.toml, else statements/)",
+        help="root folder for saving PDFs (default: [statements].dir in wally.toml)",
     )
     download_p.add_argument(
         "--chrome-profile",
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="DIR",
         dest="annotate_statements_dir",
-        help="root folder for resolving YYYY-MM stems (default: [statements] dir in wally.toml, else statements/)",
+        help="root folder for resolving YYYY-MM stems (default: [statements].dir in wally.toml)",
     )
     annotate_sub = annotate_p.add_subparsers(dest="annotate_action")
     annotate_list_p = annotate_sub.add_parser(
@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="DIR",
         dest="list_statements_dir",
-        help="root folder containing cibc/ and rbc/ subdirectories (default: [statements] dir in wally.toml, else statements/)",
+        help="root folder with cibc/ and rbc/ subdirs (default: [statements].dir in wally.toml)",
     )
     annotate_list_p.add_argument(
         "--cibc",
@@ -257,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         "--statements-dir",
         default=None,
         metavar="DIR",
-        help="root folder containing cibc/ and rbc/ subdirectories (default: [statements] dir in wally.toml, else statements/)",
+        help="root folder with cibc/ and rbc/ subdirs (default: [statements].dir in wally.toml)",
     )
     parser.add_argument(
         "--no-cache",
