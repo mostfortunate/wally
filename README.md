@@ -5,7 +5,7 @@
 Wally reads your card statements, classifies every transaction, and tells you
 whether each spending category is within budget, underspending, or overspending.
 
-<video src="assets/run_wally_demo_gif.mov" autoplay loop muted playsinline></video>
+![Wally report demo](assets/run_wally_demo.gif)
 
 ## Features
 
@@ -34,7 +34,7 @@ uv run wally init                                      # interactive budget setu
 cp classification.example.toml classification.toml     # then edit with your merchants
 ```
 
-<video src="assets/wally_init_demo_gif.mov" autoplay loop muted playsinline></video>
+![wally init demo](assets/wally_init_demo.gif)
 
 ### 3. Add statements
 
@@ -60,7 +60,7 @@ uv run wally          # auto-discovers the latest statement in each folder
 once and the pattern is saved to `classification.toml` — it applies to every future statement
 automatically.
 
-<video src="assets/wally_annotate_demo_gif.mov" autoplay loop muted playsinline></video>
+![Annotation demo](assets/wally_annotate_demo.gif)
 
 ---
 

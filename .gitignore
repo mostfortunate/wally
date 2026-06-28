@@ -232,5 +232,6 @@ wally.toml
 # Wally — statement PDFs contain full account PII; keep off the remote.
 statements/**/*.pdf
 
-# Demo assets — hosted externally (GitHub CDN); not committed to the repo.
-assets/
+# Demo assets — raw recordings stay local; only converted GIFs are committed.
+assets/*.mov
+assets/*.png
