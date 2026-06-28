@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -23,8 +24,12 @@ class BankDownloader(Protocol):
     bank: str  # display name, e.g. "CIBC" or "RBC"
     statements_url: str  # URL to navigate to for the statements list page
 
-    def list_statements(self, page: Page) -> list[StatementEntry]:
-        """Return every available statement on the current page, newest first."""
+    def pages(self, page: Page) -> Generator[list[StatementEntry]]:
+        """Yield one batch of entries per logical page (e.g. one year for RBC).
+
+        The runner downloads each batch before advancing to the next, so the
+        DOM is always in the correct state when download() is called.
+        """
         ...
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:

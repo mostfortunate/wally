@@ -52,17 +52,7 @@ def run_download(
                 "and select the right account — then press Enter..."
             )
             skipped = downloaded = 0
-
-            # Use pages() for downloaders whose table only shows one year at a time —
-            # entries must be downloaded while the correct page is still loaded.
-            # Fall back to list_statements() for simple single-page downloaders.
-            batches = (
-                downloader.pages(page)  # type: ignore[attr-defined]
-                if hasattr(downloader, "pages")
-                else [downloader.list_statements(page)]
-            )
-
-            for batch in batches:
+            for batch in downloader.pages(page):
                 if month:
                     batch = [e for e in batch if e.filename.startswith(month)]
                 for entry in batch:
