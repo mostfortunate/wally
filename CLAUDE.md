@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Remote: `https://github.com/mostfortunate/wally.git`
 
+# Wally, a Monthly Budget Tracker — Developer Guide
+A CLI tool that reads bank statement PDFs, categorises every transaction, and reports
+whether each spending category is **within budget, underspending, or overspending**.
+
 ---
 
 ## 🔒 Privacy — statement files are off-limits
@@ -18,14 +22,6 @@ Even when the user has granted consent:
 2. Use the file only for the specific purpose consented to — do not read it for any other reason.
 
 Statement PDFs contain real personal financial data. When in doubt, do not open them.
-
----
-
-# Wally, a Budget Reconciliation CLI — Developer Guide
-
-A backend-only service that ingests manually-uploaded bank statement PDFs, extracts and
-classifies every transaction, aggregates spending against monthly budget limits, and reports
-whether each category is **within budget, underspending, or overspending**.
 
 ---
 

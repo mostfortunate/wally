@@ -1,6 +1,6 @@
-"""Wally — a budget reconciliation CLI.
+"""Wally — a monthly budget tracker.
 
-A reconciliation system that happens to parse PDFs. The success bar is provable
-correctness of the numbers; see CLAUDE.md for the design rationale behind every
-module here.
+Reads bank statement PDFs, categorises transactions, and reports spending against
+your monthly limits. Internally it runs reconciliation gates to guarantee the parse
+is correct; see CLAUDE.md for the design rationale.
 """
