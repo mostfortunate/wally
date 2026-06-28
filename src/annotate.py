@@ -501,7 +501,7 @@ def _run_list_picker(
         return [("class:footer", line)]
 
     def _hint() -> StyleAndTextTuples:
-        return [("class:hint", "  ↑/↓ navigate · Enter annotate · q/Esc quit")]
+        return [("class:hint", "  ↑/↓ navigate · Enter annotate · Esc quit")]
 
     kb = KeyBindings()
 
