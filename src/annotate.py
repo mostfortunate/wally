@@ -82,7 +82,7 @@ def _append_rule(rules_path: Path, category: str, pattern: str) -> None:
     """Append pattern to category in classification.toml. Creates file if absent.
 
     Atomic write: temp file + rename. Idempotent: no-op if pattern already present.
-    category is expected to already be normalized (lowercase, stripped).
+    category must exactly match an existing key in classification.toml (case-sensitive).
     """
     if rules_path.exists():
         with rules_path.open("rb") as fh:
@@ -256,7 +256,7 @@ def _run_annotate_form(
 
     @kb.add("c-d")
     def confirm(event: KeyPressEvent) -> None:
-        result = {i: buf.text.strip().lower() for i, buf in enumerate(buffers) if buf.text.strip()}
+        result = {i: buf.text.strip() for i, buf in enumerate(buffers) if buf.text.strip()}
         event.app.exit(result=result)
 
     @kb.add("c-c")
