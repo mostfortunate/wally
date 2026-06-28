@@ -17,6 +17,7 @@ import re
 import shutil
 import sys
 import tomllib
+from datetime import datetime
 from pathlib import Path
 
 import tomli_w
@@ -448,12 +449,19 @@ def _run_list_picker(
     cursor: list[int] = [0]  # mutable slot so closures can share it
     viewport_start: list[int] = [0]
 
-    _FILE_W = 16
+    _PERIOD_W = 10
     _BANK_W = 6
     _TXN_W = 14
     _UNC_W = 15
     _DONE_W = 6
     _CHROME_ROWS = 5  # header + 2 blanks + footer + hint
+
+    def _format_period(filename: str) -> str:
+        stem = Path(filename).stem  # "2025-06"
+        try:
+            return datetime.strptime(stem, "%Y-%m").strftime("%b %Y")
+        except ValueError:
+            return stem
 
     def _visible_count() -> int:
         return max(1, shutil.get_terminal_size().lines - _CHROME_ROWS)
@@ -467,7 +475,7 @@ def _run_list_picker(
 
     def _header() -> StyleAndTextTuples:
         line = (
-            f"  {'File':<{_FILE_W}}  {'Bank':<{_BANK_W}}  "
+            f"  {'Period':<{_PERIOD_W}}  {'Bank':<{_BANK_W}}  "
             f"{'Transactions':>{_TXN_W}}  {'Uncategorized':>{_UNC_W}}  {'Done':^{_DONE_W}}"
         )
         return [("class:header", line)]
@@ -478,14 +486,22 @@ def _run_list_picker(
         result: StyleAndTextTuples = []
         for i in range(viewport_start[0], min(viewport_start[0] + vis, len(rows))):
             filename, bank, n_total, n_unc, is_done = rows[i]
+            period = _format_period(filename)
             done_char = "✓" if is_done else "✗"
-            style = "class:row-focused" if cursor[0] == i else "class:row"
-            prefix = "> " if cursor[0] == i else "  "
-            line = (
-                f"{prefix}{filename:<{_FILE_W}}  {bank:<{_BANK_W}}  "
-                f"{n_total:>{_TXN_W}}  {n_unc:>{_UNC_W}}  {done_char:^{_DONE_W}}"
+            focused = cursor[0] == i
+            style = "class:row-focused" if focused else "class:row"
+            check_style = (
+                ("class:done-focused" if focused else "class:done")
+                if is_done
+                else ("class:not-done-focused" if focused else "class:not-done")
             )
-            result.append((style, line))
+            prefix = "> " if focused else "  "
+            main = (
+                f"{prefix}{period:<{_PERIOD_W}}  {bank:<{_BANK_W}}  "
+                f"{n_total:>{_TXN_W}}  {n_unc:>{_UNC_W}}  "
+            )
+            result.append((style, main))
+            result.append((check_style, f"{done_char:^{_DONE_W}}"))
             result.append(("", "\n"))
         return result
 
@@ -543,6 +559,10 @@ def _run_list_picker(
             "header": "bold underline",
             "row": "",
             "row-focused": "bold",
+            "done": "fg:ansigreen",
+            "done-focused": "bold fg:ansigreen",
+            "not-done": "fg:ansired",
+            "not-done-focused": "bold fg:ansired",
             "footer": "fg:ansibrightblack",
             "hint": "fg:ansigreen",
         }
