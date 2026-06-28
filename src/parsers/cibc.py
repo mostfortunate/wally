@@ -194,36 +194,31 @@ class CibcParser(Parser):
 
     def parse(self, pdf_path: str) -> Statement:
         transactions: list[Transaction] = []
+        card: str | None = None
+        block: list[Transaction] = []
         with pdfplumber.open(pdf_path) as pdf:
             year = _statement_year(pdf)
             for page in pdf.pages:
                 rows = cluster_rows(page.extract_words(use_text_flow=False))
                 columns = _section_columns(rows)
-                self._collect_page(rows, columns, year, transactions)
+                for row in rows:
+                    text = _row_text(row)
+                    if text.startswith("Card number"):
+                        new_card = text.removeprefix("Card number").strip()
+                        if new_card != card:
+                            # Genuine new card — open a fresh block.
+                            card = new_card
+                            block = []
+                        # Same card repeated on a continuation page — keep accumulating.
+                    elif text.startswith("Total for") and card is not None:
+                        total = parse_amount(row[-1]["text"])
+                        if total is not None:
+                            _verify_card_total(block, total, card)
+                        transactions.extend(block)
+                        card = None
+                        block = []
+                    elif card is not None:
+                        txn = parse_transaction_row(row, columns, year)
+                        if txn is not None:
+                            block.append(txn)
         return Statement(bank=self.bank, transactions=transactions)
-
-    def _collect_page(
-        self,
-        rows: list[list[dict]],
-        columns: _Columns,
-        year: int | None,
-        transactions: list[Transaction],
-    ) -> None:
-        """Walk a page, parsing each Card number → Total for block and tying it out."""
-        card: str | None = None
-        block: list[Transaction] = []
-        for row in rows:
-            text = _row_text(row)
-            if text.startswith("Card number"):
-                card = text.removeprefix("Card number").strip()
-                block = []
-            elif text.startswith("Total for") and card is not None:
-                total = parse_amount(row[-1]["text"])
-                if total is not None:
-                    _verify_card_total(block, total, card)
-                transactions.extend(block)
-                card = None
-            elif card is not None:
-                txn = parse_transaction_row(row, columns, year)
-                if txn is not None:
-                    block.append(txn)
