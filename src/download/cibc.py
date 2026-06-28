@@ -18,7 +18,7 @@ class CIBCDownloader:
     bank = "CIBC"
     statements_url = "https://www.cibc.com/en/personal-banking/online-banking.html"
 
-    def pages(self, page: Page) -> Generator[list[StatementEntry]]:
+    def statements_by_year(self, page: Page) -> Generator[list[StatementEntry]]:
         raise NotImplementedError("CIBC: fill in statement list scraping")
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:

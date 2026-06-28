@@ -25,7 +25,7 @@ class RBCDownloader:
     bank = "RBC"
     statements_url = "https://www.rbcroyalbank.com/personal.html"
 
-    def pages(self, page: Page) -> Generator[list[StatementEntry]]:
+    def statements_by_year(self, page: Page) -> Generator[list[StatementEntry]]:
         """Yield one batch of entries per year, newest first.
 
         Keeps the table in the correct state for download() — the runner must
@@ -51,7 +51,7 @@ class RBCDownloader:
             yield _scrape_rows(page)
 
     def list_statements(self, page: Page) -> list[StatementEntry]:
-        return [entry for batch in self.pages(page) for entry in batch]
+        return [entry for batch in self.statements_by_year(page) for entry in batch]
 
     def download(self, page: Page, entry: StatementEntry, dest_dir: Path) -> Path:
         selector = (

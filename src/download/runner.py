@@ -52,7 +52,7 @@ def run_download(
                 "and select the right account — then press Enter..."
             )
             skipped = downloaded = 0
-            for batch in downloader.pages(page):
+            for batch in downloader.statements_by_year(page):
                 if month:
                     batch = [e for e in batch if e.filename.startswith(month)]
                 for entry in batch:

@@ -24,11 +24,11 @@ class BankDownloader(Protocol):
     bank: str  # display name, e.g. "CIBC" or "RBC"
     statements_url: str  # URL to navigate to for the statements list page
 
-    def pages(self, page: Page) -> Generator[list[StatementEntry]]:
-        """Yield one batch of entries per logical page (e.g. one year for RBC).
+    def statements_by_year(self, page: Page) -> Generator[list[StatementEntry]]:
+        """Yield one batch of entries per year.
 
-        The runner downloads each batch before advancing to the next, so the
-        DOM is always in the correct state when download() is called.
+        The runner downloads each batch before advancing to the next year, so
+        the DOM is always in the correct state when download() is called.
         """
         ...
 
