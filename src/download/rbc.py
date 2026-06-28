@@ -90,6 +90,7 @@ def _parse_aria_date(aria_label: str) -> date:
     if not m:
         raise ValueError(f"Cannot parse date from aria-label: {aria_label!r}")
     date_str = m.group(1).replace(".", "")  # "Feb. 2, 2026" → "Feb 2, 2026"
+    date_str = date_str.replace("Sept ", "Sep ")  # "Sept. 2, 2026" → "Sep 2, 2026"
     for fmt in ("%B %d, %Y", "%b %d, %Y"):
         try:
             return datetime.strptime(date_str, fmt).date()
